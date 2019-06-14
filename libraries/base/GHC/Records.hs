@@ -1,8 +1,11 @@
 {-# LANGUAGE AllowAmbiguousTypes
+           , ExplicitForAll
            , FunctionalDependencies
            , KindSignatures
            , MultiParamTypeClasses
            , PolyKinds
+           , ScopedTypeVariables
+           , TypeApplications
   #-}
 
 -----------------------------------------------------------------------------
@@ -24,11 +27,17 @@
 
 module GHC.Records
        ( HasField(..)
+       , getField
+       , setField
        ) where
 
--- | Constraint representing the fact that the field @x@ belongs to
--- the record type @r@ and has field type @a@.  This will be solved
--- automatically, but manual instances may be provided as well.
+-- | Constraint representing the fact that the field @x@ can be get and set on
+--   the record type @r@ and has field type @a@.  This constraint will be solved
+--   automatically, but manual instances may be provided as well.
+--
+--   The function should satisfy the invariant:
+--
+-- > uncurry ($) (hasField @x r) == r
 
 --   HasField :: forall {k}. k -> * -> * -> Constraint
 --   getField :: forall {k} (x::k) r a. HasField x r a => r -> a
@@ -37,5 +46,13 @@ module GHC.Records
 --     say     getField @"foo"
 --     not     getField @Symbol @"foo"
 class HasField x r a | x r -> a where
-  -- | Selector function to extract the field from the record.
-  getField :: r -> a
+  -- | Function to get and set a field in a record.
+  hasField :: r -> (a -> r, a)
+
+-- | Selector function to extract the field from the record.
+getField :: forall x r a . HasField x r a => r -> a
+getField = snd . hasField @x
+
+-- | Update function to set a new value of the field on the record.
+setField :: forall x r a . HasField x r a => r -> a -> r
+setField = fst . hasField @x
