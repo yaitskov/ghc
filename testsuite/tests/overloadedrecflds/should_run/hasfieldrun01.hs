@@ -7,7 +7,7 @@
            , TypeApplications
   #-}
 
-import GHC.Records (HasField(..))
+import GHC.Records (HasField(..), getField, setField)
 
 type family B where B = Bool
 
@@ -24,6 +24,10 @@ data W a where
 data Eq a => X a = MkX { xoo :: a }
 data Y a = Eq a => MkY { yoo :: a }
 
+data Z = MkZ1 { partial :: Int, total :: Bool }
+       | MkZ2 { total :: Bool }
+  deriving Show
+
 t = MkT 42 True
 
 u :: U Char Char
@@ -37,9 +41,11 @@ x = MkX True
 
 y = MkY True
 
+z = MkZ2 False
+
 -- A virtual foo field for U
 instance HasField "foo" (U a b) [Char] where
-  getField _ = "virtual"
+  hasField r = (const r, "virtual")
 
 main = do print (getField @"foo" t)
           print (getField @"bar" t)
@@ -49,3 +55,6 @@ main = do print (getField @"foo" t)
           print (getField @"woo" w)
           print (getField @"xoo" x)
           print (getField @"yoo" y)
+          print (getField @"foo" (setField @"foo" t 11))
+          print (getField @"total" (setField @"total" z True))
+          print (setField @"partial" z 42)  -- Should throw a "No match" error

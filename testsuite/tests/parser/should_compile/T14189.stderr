@@ -132,6 +132,7 @@
          (FieldLabel
           {FastString: "f"}
           (False)
+          (())
           {Name: T14189.f}))]))
      [(AvailTC
        {Name: T14189.MyType}
@@ -140,6 +141,7 @@
        [(FieldLabel
          {FastString: "f"}
          (False)
+         (())
          {Name: T14189.f})])])])
   (Nothing)))
 
