@@ -673,7 +673,8 @@ writeTcRef = writeMutVar
 
 updTcRef :: TcRef a -> (a -> a) -> TcRnIf gbl lcl ()
 -- Returns ()
-updTcRef = updMutVar
+updTcRef ref fn = liftIO $ do { old <- readIORef ref
+                              ; writeIORef ref (fn old) }
 
 {-
 ************************************************************************
