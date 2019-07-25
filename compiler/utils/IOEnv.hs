@@ -198,7 +198,7 @@ readMutVar var = liftIO (readIORef var)
 
 -- | Strict update.
 updMutVar :: IORef a -> (a -> a) -> IOEnv env ()
-updMutVar var upd = liftIO (modifyIORef' var upd)
+updMutVar var upd = liftIO (modifyIORef var upd)
 
 -- | Strict variant of 'atomicUpdMutVar'.
 atomicUpdMutVar' :: IORef a -> (a -> (a, b)) -> IOEnv env b
