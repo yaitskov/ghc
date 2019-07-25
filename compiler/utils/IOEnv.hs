@@ -191,7 +191,7 @@ newMutVar val = liftIO (newIORef $! val)
 
 -- | Strict write.
 writeMutVar :: IORef a -> a -> IOEnv env ()
-writeMutVar var val = liftIO (writeIORef var $! val)
+writeMutVar var val = liftIO (writeIORef var val)
 
 readMutVar :: IORef a -> IOEnv env a
 readMutVar var = liftIO (readIORef var)
