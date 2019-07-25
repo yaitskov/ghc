@@ -40,7 +40,7 @@ import Exception
 import Module
 import Panic
 
-import Data.IORef       ( IORef, newIORef, readIORef, writeIORef, modifyIORef',
+import Data.IORef       ( IORef, newIORef, readIORef, writeIORef, modifyIORef,
                           atomicModifyIORef' )
 import System.IO.Unsafe ( unsafeInterleaveIO )
 import System.IO        ( fixIO )
@@ -196,7 +196,6 @@ writeMutVar var val = liftIO (writeIORef var $! val)
 readMutVar :: IORef a -> IOEnv env a
 readMutVar var = liftIO (readIORef var)
 
--- | Strict update.
 updMutVar :: IORef a -> (a -> a) -> IOEnv env ()
 updMutVar var upd = liftIO (modifyIORef var upd)
 
