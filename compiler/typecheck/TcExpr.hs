@@ -2042,7 +2042,7 @@ checkCrossStageLifting top_lvl id (Brack _ (TcPending ps_var lie_var))
         ; ps <- readMutVar ps_var
         ; let pending_splice = PendingTcSplice id_name
                                  (nlHsApp (noLoc lift) (nlHsVar id))
-        ; writeMutVar ps_var (pending_splice : ps)
+        ; writeMutVar' ps_var (pending_splice : ps)
 
         ; return () }
   where

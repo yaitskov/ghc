@@ -334,7 +334,7 @@ setGlobalTypeEnv :: TcGblEnv -> TypeEnv -> TcM TcGblEnv
 --                  * the tcg_type_env_var field seen by interface files
 setGlobalTypeEnv tcg_env new_type_env
   = do  {     -- Sync the type-envt variable seen by interface files
-           writeMutVar (tcg_type_env_var tcg_env) new_type_env
+           writeMutVar' (tcg_type_env_var tcg_env) new_type_env
          ; return (tcg_env { tcg_type_env = new_type_env }) }
 
 

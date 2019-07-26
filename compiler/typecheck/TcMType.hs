@@ -469,7 +469,7 @@ inferResultToType (IR { ir_uniq = u, ir_lvl = tc_lvl
   = do { rr  <- newMetaTyVarTyAtLevel tc_lvl runtimeRepTy
        ; tau <- newMetaTyVarTyAtLevel tc_lvl (tYPE rr)
              -- See Note [TcLevel of ExpType]
-       ; writeMutVar ref (Just tau)
+       ; writeMutVar' ref (Just tau)
        ; traceTc "Forcing ExpType to be monomorphic:"
                  (ppr u <+> text ":=" <+> ppr tau)
        ; return tau }
@@ -884,7 +884,7 @@ writeMetaTyVarRef tyvar ref ty
        ; MASSERT2( kind_check_ok, kind_msg )
 
        -- Do the write
-       ; writeMutVar ref (Indirect ty) }
+       ; writeMutVar' ref (Indirect ty) }
   where
     tv_kind = tyVarKind tyvar
     ty_kind = tcTypeKind ty

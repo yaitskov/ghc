@@ -29,7 +29,7 @@ module IOEnv (
         -- * I/O operations
         -- | These operations are generally strict to avoid the potential
         -- for space leaks.
-        IORef, newMutVar, readMutVar, writeMutVar, updMutVar,
+        IORef, newMutVar, readMutVar, writeMutVar, writeMutVar', updMutVar,
         atomicUpdMutVar'
   ) where
 
@@ -189,9 +189,12 @@ instance MonadIO (IOEnv env) where
 newMutVar :: a -> IOEnv env (IORef a)
 newMutVar val = liftIO (newIORef $! val)
 
--- | Strict write.
 writeMutVar :: IORef a -> a -> IOEnv env ()
 writeMutVar var val = liftIO (writeIORef var val)
+
+-- | Strict write.
+writeMutVar' :: IORef a -> a -> IOEnv env ()
+writeMutVar' var val = liftIO (writeIORef var $! val)
 
 readMutVar :: IORef a -> IOEnv env a
 readMutVar var = liftIO (readIORef var)

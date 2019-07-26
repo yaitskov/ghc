@@ -265,7 +265,7 @@ rnSpliceGen run_splice pend_splice splice
                                     rnSplice splice
                 ; let (pending_splice, result) = pend_splice splice'
                 ; ps <- readMutVar ps_var
-                ; writeMutVar ps_var (pending_splice : ps)
+                ; writeMutVar' ps_var (pending_splice : ps)
                 ; return (result, fvs) }
 
         _ ->  do { (splice', fvs1) <- checkNoErrs $
@@ -837,7 +837,7 @@ check_cross_stage_lifting top_lvl name ps_var
 
           -- Update the pending splices
         ; ps <- readMutVar ps_var
-        ; writeMutVar ps_var (pend_splice : ps) }
+        ; writeMutVar' ps_var (pend_splice : ps) }
 
 {-
 Note [Keeping things alive for Template Haskell]

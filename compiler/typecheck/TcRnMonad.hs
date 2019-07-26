@@ -604,7 +604,7 @@ newUnique
         let { u_var = env_us env } ;
         us <- readMutVar u_var ;
         case takeUniqFromSupply us of { (uniq, us') -> do {
-        writeMutVar u_var us' ;
+        writeMutVar' u_var us' ;
         return $! uniq }}}
    -- NOTE 1: we strictly split the supply, to avoid the possibility of leaving
    -- a chain of unevaluated supplies behind.
@@ -619,7 +619,7 @@ newUniqueSupply
         let { u_var = env_us env } ;
         us <- readMutVar u_var ;
         case splitUniqSupply us of { (us1,us2) -> do {
-        writeMutVar u_var us1 ;
+        writeMutVar' u_var us1 ;
         return us2 }}}
 
 cloneLocalName :: Name -> TcM Name
