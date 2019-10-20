@@ -184,6 +184,30 @@ bdescr *mark_stack_top_bd; // topmost block in the mark stack
 bdescr *mark_stack_bd;     // current block in the mark stack
 StgPtr mark_sp;            // pointer to the next unallocated mark stack entry
 
+WARD_NEED(may_take_sm_lock)
+WARD_REVOKE(may_take_sm_lock)
+WARD_GRANT(sharing_sm_lock)
+WARD_GRANT(may_call_sm) // TODO: This shouldn't be available with taking spinlock
+WARD_GRANT(sm_lock_held)
+static void
+SHARE_SM_LOCK(void)
+{
+  ACQUIRE_SM_LOCK;
+}
+
+WARD_GRANT(may_take_sm_lock)
+WARD_NEED(sharing_sm_lock)
+WARD_REVOKE(sharing_sm_lock)
+WARD_NEED(sm_lock_held)
+WARD_REVOKE(sm_lock_held)
+WARD_NEED(may_call_sm) // TODO: This shouldn't be available with taking spinlock
+WARD_REVOKE(may_call_sm) // TODO: This shouldn't be available with taking spinlock
+static void
+UNSHARE_SM_LOCK(void)
+{
+  RELEASE_SM_LOCK;
+}
+
 /* -----------------------------------------------------------------------------
    GarbageCollect: the main entry point to the garbage collector.
 
@@ -219,7 +243,7 @@ GarbageCollect (uint32_t collect_gen,
   CostCentreStack *save_CCS[n_capabilities];
 #endif
 
-  ACQUIRE_SM_LOCK;
+  SHARE_SM_LOCK();
 
 #if defined(RTS_USER_SIGNALS)
   if (RtsFlags.MiscFlags.install_signal_handlers) {
@@ -478,9 +502,9 @@ GarbageCollect (uint32_t collect_gen,
   // the current garbage collection, so we invoke LdvCensusForDead().
   if (RtsFlags.ProfFlags.doHeapProfile == HEAP_BY_LDV
       || RtsFlags.ProfFlags.bioSelector != NULL) {
-      RELEASE_SM_LOCK; // LdvCensusForDead may need to take the lock
+      UNSHARE_SM_LOCK(); // LdvCensusForDead may need to take the lock
       LdvCensusForDead(N);
-      ACQUIRE_SM_LOCK;
+      SHARE_SM_LOCK();
   }
 #endif
 
@@ -828,9 +852,9 @@ GarbageCollect (uint32_t collect_gen,
 
   // Start any pending finalizers.  Must be after
   // updateStableTables() and stableUnlock() (see #4221).
-  RELEASE_SM_LOCK;
+  UNSHARE_SM_LOCK();
   scheduleFinalizers(cap, dead_weak_ptr_list);
-  ACQUIRE_SM_LOCK;
+  SHARE_SM_LOCK();
 
   // check sanity after GC
   // before resurrectThreads(), because that might overwrite some
@@ -845,15 +869,15 @@ GarbageCollect (uint32_t collect_gen,
   // behind.
   if (do_heap_census) {
       debugTrace(DEBUG_sched, "performing heap census");
-      RELEASE_SM_LOCK;
+      UNSHARE_SM_LOCK();
       heapCensus(gct->gc_start_cpu);
-      ACQUIRE_SM_LOCK;
+      SHARE_SM_LOCK();
   }
 
   // send exceptions to any threads which were about to die
-  RELEASE_SM_LOCK;
+  UNSHARE_SM_LOCK();
   resurrectThreads(resurrected_threads);
-  ACQUIRE_SM_LOCK;
+  SHARE_SM_LOCK();
 
   if (major_gc) {
       W_ need_prealloc, need_live, need, got;
@@ -940,7 +964,7 @@ GarbageCollect (uint32_t collect_gen,
   }
 #endif
 
-  RELEASE_SM_LOCK;
+  UNSHARE_SM_LOCK();
 
   SET_GCT(saved_gct);
 }
@@ -1407,6 +1431,7 @@ stash_mut_list (Capability *cap, uint32_t gen_no)
    ------------------------------------------------------------------------- */
 
 WARD_NEED(may_call_sm)
+WARD_NEED(sharing_sm_lock)
 static void
 prepare_collected_gen (generation *gen)
 {
@@ -1544,10 +1569,26 @@ prepare_collected_gen (generation *gen)
     }
 }
 
+
+/* ----------------------------------------------------------------------------
+   Save the mutable lists in saved_mut_lists
+   ------------------------------------------------------------------------- */
+
+WARD_NEED(may_call_sm)
+WARD_NEED(sharing_sm_lock)
+static void
+stash_mut_list (Capability *cap, uint32_t gen_no)
+{
+    cap->saved_mut_lists[gen_no] = cap->mut_lists[gen_no];
+    cap->mut_lists[gen_no] = allocBlockOnNode_sync(cap->node);
+}
+
 /* ----------------------------------------------------------------------------
    Initialise a generation that is *not* to be collected
    ------------------------------------------------------------------------- */
 
+WARD_NEED(may_call_sm)
+WARD_NEED(sharing_sm_lock)
 static void
 prepare_uncollected_gen (generation *gen)
 {
@@ -1822,6 +1863,7 @@ resizeGenerations (void)
    Calculate the new size of the nursery, and resize it.
    -------------------------------------------------------------------------- */
 
+WARD_NEED(may_call_sm)
 static void
 resize_nursery (void)
 {

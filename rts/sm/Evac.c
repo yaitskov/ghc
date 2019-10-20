@@ -64,6 +64,7 @@ STATIC_INLINE void evacuate_large(StgPtr p);
    -------------------------------------------------------------------------- */
 
 /* size is in words */
+WARD_NEED(sharing_sm_lock)
 STATIC_INLINE StgPtr
 alloc_for_copy (uint32_t size, uint32_t gen_no)
 {
@@ -135,6 +136,8 @@ alloc_for_copy (uint32_t size, uint32_t gen_no)
    -------------------------------------------------------------------------- */
 
 /* size is in words */
+WARD_NEED(may_call_sm)
+WARD_NEED(sharing_sm_lock)
 STATIC_INLINE GNUC_ATTR_HOT void
 copy_tag(StgClosure **p, const StgInfoTable *info,
          StgClosure *src, uint32_t size, uint32_t gen_no, StgWord tag)
@@ -227,6 +230,8 @@ copy_tag_nolock(StgClosure **p, const StgInfoTable *info,
  * pointer of an object, but reserve some padding after it.  This is
  * used to optimise evacuation of TSOs.
  */
+WARD_NEED(may_call_sm)
+WARD_NEED(sharing_sm_lock)
 static bool
 copyPart(StgClosure **p, StgClosure *src, uint32_t size_to_reserve,
          uint32_t size_to_copy, uint32_t gen_no)
@@ -280,6 +285,8 @@ spin:
 
 
 /* Copy wrappers that don't tag the closure after copying */
+WARD_NEED(may_call_sm)
+WARD_NEED(sharing_sm_lock)
 STATIC_INLINE GNUC_ATTR_HOT void
 copy(StgClosure **p, const StgInfoTable *info,
      StgClosure *src, uint32_t size, uint32_t gen_no)
@@ -573,6 +580,8 @@ evacuate_compact (StgPtr p)
    extra reads/writes than we save.
    ------------------------------------------------------------------------- */
 
+WARD_NEED(sharing_sm_lock)
+WARD_NEED(may_call_sm)
 REGPARM1 GNUC_ATTR_HOT void
 evacuate(StgClosure **p)
 {
@@ -970,6 +979,8 @@ loop:
    See also Note [upd-black-hole] in sm/Scav.c.
    -------------------------------------------------------------------------- */
 
+WARD_NEED(sharing_sm_lock)
+WARD_NEED(may_call_sm)
 void
 evacuate_BLACKHOLE(StgClosure **p)
 {
@@ -1118,6 +1129,8 @@ unchain_thunk_selectors(StgSelector *p, StgClosure *val)
    the evac parameter.
    -------------------------------------------------------------------------- */
 
+WARD_NEED(may_call_sm)
+WARD_NEED(sharing_sm_lock)
 static void
 eval_thunk_selector (StgClosure **q, StgSelector *p, bool evac)
                  // NB. for legacy reasons, p & q are swapped around :(
