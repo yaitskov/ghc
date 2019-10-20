@@ -2003,6 +2003,7 @@ delete_threads_and_gc:
  * Singleton fork(). Do not copy any running threads.
  * ------------------------------------------------------------------------- */
 
+WARD_NEED(may_take_sm_lock)
 pid_t
 forkProcess(HsStablePtr *entry
 #if !defined(FORKPROCESS_PRIMOP_SUPPORTED)
@@ -2587,6 +2588,7 @@ scheduleThreadOn(Capability *cap, StgWord cpu USED_IF_THREADS, StgTSO *tso)
 #endif
 }
 
+WARD_NEED(may_take_sm_lock)
 void
 scheduleWaitThread (StgTSO* tso, /*[out]*/HaskellObj* ret, Capability **pcap)
 {
@@ -2627,6 +2629,7 @@ scheduleWaitThread (StgTSO* tso, /*[out]*/HaskellObj* ret, Capability **pcap)
  * ------------------------------------------------------------------------- */
 
 #if defined(THREADED_RTS)
+WARD_NEED(may_take_sm_lock)
 void scheduleWorker (Capability *cap, Task *task)
 {
     // schedule() runs without a lock.
@@ -2644,10 +2647,10 @@ void scheduleWorker (Capability *cap, Task *task)
     // will just block in waitForCapability() because the
     // Capability has been shut down.
     //
-    ACQUIRE_LOCK(&cap->lock);
+    acquire_capability_lock(cap);
     releaseCapability_(cap,false);
     workerTaskStop(task);
-    RELEASE_LOCK(&cap->lock);
+    release_capability_lock(cap);
 }
 #endif
 
@@ -2664,9 +2667,9 @@ startWorkerTasks (uint32_t from USED_IF_THREADS, uint32_t to USED_IF_THREADS)
 
     for (i = from; i < to; i++) {
         cap = capabilities[i];
-        ACQUIRE_LOCK(&cap->lock);
+        acquire_capability_lock(cap);
         startWorkerTask(cap);
-        RELEASE_LOCK(&cap->lock);
+        release_capability_lock(cap);
     }
 #endif
 }
@@ -2724,6 +2727,7 @@ initScheduler(void)
 
 }
 
+WARD_NEED(may_take_sm_lock)
 void
 exitScheduler (bool wait_foreign USED_IF_THREADS)
                /* see Capability.c, shutdownCapability() */
@@ -2810,12 +2814,14 @@ performGC_(bool force_major)
     boundTaskExiting(task);
 }
 
+WARD_NEED(may_take_sm_lock)
 void
 performGC(void)
 {
     performGC_(false);
 }
 
+WARD_NEED(may_take_sm_lock)
 void
 performMajorGC(void)
 {
