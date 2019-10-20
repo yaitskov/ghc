@@ -87,6 +87,8 @@ static void scavenge_large_bitmap (StgPtr p,
 # define scavenge_compact(str) scavenge_compact1(str)
 #endif
 
+WARD_NEED(sharing_sm_lock)
+WARD_NEED(may_call_sm)
 static void do_evacuate(StgClosure **p, void *user STG_UNUSED)
 {
     evacuate(p);
@@ -96,6 +98,8 @@ static void do_evacuate(StgClosure **p, void *user STG_UNUSED)
    Scavenge a TSO.
    -------------------------------------------------------------------------- */
 
+WARD_NEED(sharing_sm_lock)
+WARD_NEED(may_call_sm)
 void
 scavengeTSO (StgTSO *tso)
 {
@@ -160,6 +164,8 @@ typedef struct {
     HashTable *newHash;
 } MapHashData;
 
+WARD_NEED(sharing_sm_lock)
+WARD_NEED(may_call_sm)
 static void
 evacuate_hash_entry(MapHashData *dat, StgWord key, const void *value)
 {
@@ -210,6 +216,8 @@ scavenge_compact(StgCompactNFData *str)
    Mutable arrays of pointers
    -------------------------------------------------------------------------- */
 
+WARD_NEED(sharing_sm_lock)
+WARD_NEED(may_call_sm)
 StgPtr scavenge_mut_arr_ptrs (StgMutArrPtrs *a)
 {
     W_ m;
@@ -252,6 +260,8 @@ StgPtr scavenge_mut_arr_ptrs (StgMutArrPtrs *a)
 }
 
 // scavenge only the marked areas of a MUT_ARR_PTRS
+WARD_NEED(sharing_sm_lock)
+WARD_NEED(may_call_sm)
 static StgPtr scavenge_mut_arr_ptrs_marked (StgMutArrPtrs *a)
 {
     W_ m;
@@ -281,6 +291,8 @@ static StgPtr scavenge_mut_arr_ptrs_marked (StgMutArrPtrs *a)
     return (StgPtr)a + mut_arr_ptrs_sizeW(a);
 }
 
+WARD_NEED(sharing_sm_lock)
+WARD_NEED(may_call_sm)
 STATIC_INLINE StgPtr
 scavenge_small_bitmap (StgPtr p, StgWord size, StgWord bitmap)
 {
@@ -300,6 +312,8 @@ scavenge_small_bitmap (StgPtr p, StgWord size, StgWord bitmap)
    in PAPs.
    -------------------------------------------------------------------------- */
 
+WARD_NEED(sharing_sm_lock)
+WARD_NEED(may_call_sm)
 STATIC_INLINE StgPtr
 scavenge_arg_block (const StgFunInfoTable *fun_info, StgClosure **args)
 {
@@ -328,6 +342,8 @@ scavenge_arg_block (const StgFunInfoTable *fun_info, StgClosure **args)
     return p;
 }
 
+WARD_NEED(sharing_sm_lock)
+WARD_NEED(may_call_sm)
 STATIC_INLINE GNUC_ATTR_HOT StgPtr
 scavenge_PAP_payload (StgClosure *fun, StgClosure **payload, StgWord size)
 {
@@ -360,6 +376,8 @@ scavenge_PAP_payload (StgClosure *fun, StgClosure **payload, StgWord size)
     return p;
 }
 
+WARD_NEED(sharing_sm_lock)
+WARD_NEED(may_call_sm)
 GNUC_ATTR_HOT StgPtr
 scavenge_PAP (StgPAP *pap)
 {
@@ -367,6 +385,8 @@ scavenge_PAP (StgPAP *pap)
     return scavenge_PAP_payload (pap->fun, pap->payload, pap->n_args);
 }
 
+WARD_NEED(sharing_sm_lock)
+WARD_NEED(may_call_sm)
 StgPtr
 scavenge_AP (StgAP *ap)
 {
@@ -378,6 +398,8 @@ scavenge_AP (StgAP *ap)
    Scavenge SRTs
    -------------------------------------------------------------------------- */
 
+WARD_NEED(sharing_sm_lock)
+WARD_NEED(may_call_sm)
 GNUC_ATTR_HOT void
 scavenge_thunk_srt(const StgInfoTable *info)
 {
@@ -392,6 +414,8 @@ scavenge_thunk_srt(const StgInfoTable *info)
     }
 }
 
+WARD_NEED(sharing_sm_lock)
+WARD_NEED(may_call_sm)
 GNUC_ATTR_HOT void
 scavenge_fun_srt(const StgInfoTable *info)
 {
@@ -418,6 +442,8 @@ scavenge_fun_srt(const StgInfoTable *info)
    idea.
    -------------------------------------------------------------------------- */
 
+WARD_NEED(sharing_sm_lock)
+WARD_NEED(may_call_sm)
 static GNUC_ATTR_HOT void
 scavenge_block (bdescr *bd)
 {
@@ -859,6 +885,8 @@ scavenge_block (bdescr *bd)
         doesn't need to advance the pointer on to the next object.
    -------------------------------------------------------------------------- */
 
+WARD_NEED(sharing_sm_lock)
+WARD_NEED(may_call_sm)
 static void
 scavenge_mark_stack(void)
 {
@@ -1225,6 +1253,8 @@ scavenge_mark_stack(void)
    objects can have this property.
    -------------------------------------------------------------------------- */
 
+WARD_NEED(sharing_sm_lock)
+WARD_NEED(may_call_sm)
 static bool
 scavenge_one(StgPtr p)
 {
@@ -1578,6 +1608,8 @@ scavenge_one(StgPtr p)
    remove non-mutable objects from the mutable list at this point.
    -------------------------------------------------------------------------- */
 
+WARD_NEED(sharing_sm_lock)
+WARD_NEED(may_call_sm)
 static void
 scavenge_mutable_list(bdescr *bd, generation *gen)
 {
@@ -1705,6 +1737,8 @@ scavenge_capability_mut_lists (Capability *cap)
    remove non-mutable objects from the mutable list at this point.
    -------------------------------------------------------------------------- */
 
+WARD_NEED(sharing_sm_lock)
+WARD_NEED(may_call_sm)
 static void
 scavenge_static(void)
 {
@@ -1817,6 +1851,8 @@ scavenge_large_bitmap( StgPtr p, StgLargeBitmap *large_bitmap, StgWord size )
    AP_STACK_UPDs, since these are just sections of copied stack.
    -------------------------------------------------------------------------- */
 
+WARD_NEED(sharing_sm_lock)
+WARD_NEED(may_call_sm)
 void
 scavenge_stack(StgPtr p, StgPtr stack_end)
 {
@@ -1982,6 +2018,8 @@ scavenge_stack(StgPtr p, StgPtr stack_end)
   be zero.
   --------------------------------------------------------------------------- */
 
+WARD_NEED(sharing_sm_lock)
+WARD_NEED(may_call_sm)
 static void
 scavenge_large (gen_workspace *ws)
 {
@@ -2043,6 +2081,8 @@ scavenge_large (gen_workspace *ws)
    is other work we can usefully be doing.
    ------------------------------------------------------------------------- */
 
+WARD_NEED(sharing_sm_lock)
+WARD_NEED(may_call_sm)
 static bool
 scavenge_find_work (void)
 {
