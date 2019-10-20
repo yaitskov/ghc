@@ -407,7 +407,6 @@ INLINE_HEADER bool emptyInbox(Capability *cap);
  * -------------------------------------------------------------------------- */
 
 WARD_NEED(may_take_sm_lock)
-WARD_NEED(may_call_sm)
 EXTERN_INLINE void
 recordMutableCap (const StgClosure *p, Capability *cap, uint32_t gen)
 {
@@ -428,7 +427,6 @@ recordMutableCap (const StgClosure *p, Capability *cap, uint32_t gen)
 }
 
 WARD_NEED(may_take_sm_lock)
-WARD_NEED(may_call_sm)
 EXTERN_INLINE void
 recordClosureMutated (Capability *cap, StgClosure *p)
 {
