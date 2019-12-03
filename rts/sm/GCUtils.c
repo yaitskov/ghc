@@ -39,10 +39,8 @@ static void ACQUIRE_ALLOC_SPIN_LOCK(void)
 }
 
 WARD_NEED(sharing_sm_lock)
-WARD_NEED(gc_block_alloc_spin_held)
-WARD_REVOKE(gc_block_alloc_spin_held)
-WARD_NEED(may_call_sm)
-WARD_REVOKE(may_call_sm)
+WARD_NEED_REVOKE(gc_block_alloc_spin_held)
+WARD_NEED_REVOKE(may_call_sm)
 static void RELEASE_ALLOC_SPIN_LOCK(void)
 {
     RELEASE_SPIN_LOCK(&gc_alloc_block_sync);
@@ -216,6 +214,7 @@ push_scanned_block (bdescr *bd, gen_workspace *ws)
     - push_scanned_block doesn't put these blocks on the part_list
 */
 
+WARD_NEED(sharing_sm_lock)
 StgPtr
 todo_block_full (uint32_t size, gen_workspace *ws)
 {
@@ -321,6 +320,7 @@ todo_block_full (uint32_t size, gen_workspace *ws)
     return p;
 }
 
+WARD_NEED(sharing_sm_lock)
 StgPtr
 alloc_todo_block (gen_workspace *ws, uint32_t size)
 {

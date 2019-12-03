@@ -10,6 +10,7 @@
 #include "Printer.h"
 #include "MarkWeak.h" // scavengeLiveWeak
 
+WARD_NEED(sharing_sm_lock)
 void
 nonmovingScavengeOne (StgClosure *q)
 {
@@ -356,6 +357,7 @@ nonmovingScavengeOne (StgClosure *q)
 }
 
 /* Scavenge objects evacuated into a nonmoving segment by a minor GC */
+WARD_NEED(sharing_sm_lock)
 void
 scavengeNonmovingSegment (struct NonmovingSegment *seg)
 {

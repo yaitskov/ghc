@@ -184,30 +184,27 @@ bdescr *mark_stack_top_bd; // topmost block in the mark stack
 bdescr *mark_stack_bd;     // current block in the mark stack
 StgPtr mark_sp;            // pointer to the next unallocated mark stack entry
 
-WARD_NEED(may_take_sm_lock)
-WARD_REVOKE(may_take_sm_lock)
+/* -----------------------------------------------------------------------------
+   Storage manager locking
+   -------------------------------------------------------------------------- */
+
+/* N.B. We don't use ACQUIRE_SM_LOCK/RELEASE_SM_LOCK here to ensure that we
+ * don't grant the may_call_sm Ward permission.
+ */
+
+WARD_NEED_REVOKE(may_call_sm)
+WARD_NEED_REVOKE(sm_lock_held)
 WARD_GRANT(sharing_sm_lock)
-WARD_GRANT(may_call_sm) // TODO: This shouldn't be available with taking spinlock
-WARD_GRANT(sm_lock_held)
 static void
 SHARE_SM_LOCK(void)
-{
-  ACQUIRE_SM_LOCK;
-}
+{ }
 
-WARD_GRANT(may_take_sm_lock)
-WARD_WAIVE(may_take_sm_lock)
-WARD_NEED(sharing_sm_lock)
-WARD_REVOKE(sharing_sm_lock)
-WARD_NEED(sm_lock_held)
-WARD_REVOKE(sm_lock_held)
-WARD_NEED(may_call_sm) // TODO: This shouldn't be available with taking spinlock
-WARD_REVOKE(may_call_sm) // TODO: This shouldn't be available with taking spinlock
+WARD_NEED_REVOKE(sharing_sm_lock)
+WARD_GRANT(sm_lock_held)
+WARD_GRANT(may_call_sm)
 static void
 UNSHARE_SM_LOCK(void)
-{
-  RELEASE_SM_LOCK;
-}
+{ }
 
 /* -----------------------------------------------------------------------------
    GarbageCollect: the main entry point to the garbage collector.
@@ -244,7 +241,7 @@ GarbageCollect (uint32_t collect_gen,
   CostCentreStack *save_CCS[n_capabilities];
 #endif
 
-  SHARE_SM_LOCK();
+  ACQUIRE_SM_LOCK;
 
 #if defined(RTS_USER_SIGNALS)
   if (RtsFlags.MiscFlags.install_signal_handlers) {
@@ -376,6 +373,8 @@ GarbageCollect (uint32_t collect_gen,
   // Prepare this gc_thread
   init_gc_thread(gct);
 
+  SHARE_SM_LOCK();
+
   /* Allocate a mark stack if we're doing a major collection.
    */
   if (major_gc && oldest_gen->mark) {
@@ -480,6 +479,7 @@ GarbageCollect (uint32_t collect_gen,
   }
 
   shutdown_gc_threads(gct->thread_index, idle_cap);
+  UNSHARE_SM_LOCK();
 
   // Now see which stable names are still alive.
   gcStableNameTable();
@@ -503,9 +503,9 @@ GarbageCollect (uint32_t collect_gen,
   // the current garbage collection, so we invoke LdvCensusForDead().
   if (RtsFlags.ProfFlags.doHeapProfile == HEAP_BY_LDV
       || RtsFlags.ProfFlags.bioSelector != NULL) {
-      UNSHARE_SM_LOCK(); // LdvCensusForDead may need to take the lock
+      RELEASE_SM_LOCK; // LdvCensusForDead may need to take the lock
       LdvCensusForDead(N);
-      SHARE_SM_LOCK();
+      ACQUIRE_SM_LOCK;
   }
 #endif
 
@@ -513,12 +513,13 @@ GarbageCollect (uint32_t collect_gen,
 
   // Finally: compact or sweep the oldest generation.
   if (major_gc && oldest_gen->mark) {
-      if (oldest_gen->compact)
+      if (oldest_gen->compact) {
           compact(gct->scavenged_static_objects,
                   &dead_weak_ptr_list,
                   &resurrected_threads);
-      else
+      } else {
           sweep(oldest_gen);
+      }
   }
 
   copied = 0;
@@ -853,9 +854,7 @@ GarbageCollect (uint32_t collect_gen,
 
   // Start any pending finalizers.  Must be after
   // updateStableTables() and stableUnlock() (see #4221).
-  UNSHARE_SM_LOCK();
   scheduleFinalizers(cap, dead_weak_ptr_list);
-  SHARE_SM_LOCK();
 
   // check sanity after GC
   // before resurrectThreads(), because that might overwrite some
@@ -870,15 +869,11 @@ GarbageCollect (uint32_t collect_gen,
   // behind.
   if (do_heap_census) {
       debugTrace(DEBUG_sched, "performing heap census");
-      UNSHARE_SM_LOCK();
       heapCensus(gct->gc_start_cpu);
-      SHARE_SM_LOCK();
   }
 
   // send exceptions to any threads which were about to die
-  UNSHARE_SM_LOCK();
   resurrectThreads(resurrected_threads);
-  SHARE_SM_LOCK();
 
   if (major_gc) {
       W_ need_prealloc, need_live, need, got;
@@ -965,7 +960,7 @@ GarbageCollect (uint32_t collect_gen,
   }
 #endif
 
-  UNSHARE_SM_LOCK();
+  RELEASE_SM_LOCK;
 
   SET_GCT(saved_gct);
 }
@@ -1049,6 +1044,7 @@ new_gc_thread (uint32_t n, gc_thread *t)
 }
 
 
+WARD_NEED(may_call_sm)
 void
 initGcThreads (uint32_t from USED_IF_THREADS, uint32_t to USED_IF_THREADS)
 {
@@ -1175,7 +1171,6 @@ any_work (void)
 }
 
 WARD_NEED(sharing_sm_lock)
-WARD_NEED(may_call_sm)
 static void
 scavenge_until_all_done (void)
 {
@@ -1227,14 +1222,10 @@ loop:
 
 #if defined(THREADED_RTS)
 
-WARD_GRANT(may_call_sm)
 WARD_GRANT(sharing_sm_lock)
 static void enter_gc_thread(void) {}
 
-WARD_REVOKE(may_call_sm)
-WARD_NEED(may_call_sm)
-WARD_REVOKE(sharing_sm_lock)
-WARD_NEED(sharing_sm_lock)
+WARD_NEED_REVOKE(sharing_sm_lock)
 static void leave_gc_thread(void) {}
 
 void
@@ -1434,11 +1425,12 @@ releaseGCThreads (Capability *cap USED_IF_THREADS, bool idle_cap[])
    during GC
    ------------------------------------------------------------------------- */
 
+WARD_NEED(may_call_sm)
 static void
 stash_mut_list (Capability *cap, uint32_t gen_no)
 {
     cap->saved_mut_lists[gen_no] = cap->mut_lists[gen_no];
-    cap->mut_lists[gen_no] = allocBlockOnNode_sync(cap->node);
+    cap->mut_lists[gen_no] = allocBlockOnNode(cap->node);
 }
 
 /* ----------------------------------------------------------------------------
@@ -1446,7 +1438,7 @@ stash_mut_list (Capability *cap, uint32_t gen_no)
    ------------------------------------------------------------------------- */
 
 WARD_NEED(may_call_sm)
-WARD_NEED(sharing_sm_lock)
+WARD_NEED(sm_lock_held)
 static void
 prepare_collected_gen (generation *gen)
 {
@@ -1522,7 +1514,9 @@ prepare_collected_gen (generation *gen)
             ws->todo_bd->link = gen->old_blocks;
             gen->old_blocks = ws->todo_bd;
             gen->n_old_blocks += ws->todo_bd->blocks;
+            SHARE_SM_LOCK();
             alloc_todo_block(ws,0); // always has one block.
+            UNSHARE_SM_LOCK();
         }
     }
 
@@ -1586,24 +1580,10 @@ prepare_collected_gen (generation *gen)
 
 
 /* ----------------------------------------------------------------------------
-   Save the mutable lists in saved_mut_lists
-   ------------------------------------------------------------------------- */
-
-WARD_NEED(may_call_sm)
-WARD_NEED(sharing_sm_lock)
-static void
-stash_mut_list (Capability *cap, uint32_t gen_no)
-{
-    cap->saved_mut_lists[gen_no] = cap->mut_lists[gen_no];
-    cap->mut_lists[gen_no] = allocBlockOnNode_sync(cap->node);
-}
-
-/* ----------------------------------------------------------------------------
    Initialise a generation that is *not* to be collected
    ------------------------------------------------------------------------- */
 
 WARD_NEED(may_call_sm)
-WARD_NEED(sharing_sm_lock)
 static void
 prepare_uncollected_gen (generation *gen)
 {

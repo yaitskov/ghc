@@ -17,8 +17,11 @@
 
 #include "GCTDecl.h"
 
-bdescr* allocGroup_sync(uint32_t n);
-bdescr* allocGroupOnNode_sync(uint32_t node, uint32_t n);
+bdescr* allocGroup_sync(uint32_t n)
+  WARD_NEED(sharing_sm_lock);
+
+bdescr* allocGroupOnNode_sync(uint32_t node, uint32_t n)
+  WARD_NEED(sharing_sm_lock);
 
 WARD_NEED(sharing_sm_lock)
 INLINE_HEADER bdescr *allocBlock_sync(void)

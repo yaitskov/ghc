@@ -136,7 +136,6 @@ alloc_for_copy (uint32_t size, uint32_t gen_no)
    -------------------------------------------------------------------------- */
 
 /* size is in words */
-WARD_NEED(may_call_sm)
 WARD_NEED(sharing_sm_lock)
 STATIC_INLINE GNUC_ATTR_HOT void
 copy_tag(StgClosure **p, const StgInfoTable *info,
@@ -230,7 +229,6 @@ copy_tag_nolock(StgClosure **p, const StgInfoTable *info,
  * pointer of an object, but reserve some padding after it.  This is
  * used to optimise evacuation of TSOs.
  */
-WARD_NEED(may_call_sm)
 WARD_NEED(sharing_sm_lock)
 static bool
 copyPart(StgClosure **p, StgClosure *src, uint32_t size_to_reserve,
@@ -285,7 +283,6 @@ spin:
 
 
 /* Copy wrappers that don't tag the closure after copying */
-WARD_NEED(may_call_sm)
 WARD_NEED(sharing_sm_lock)
 STATIC_INLINE GNUC_ATTR_HOT void
 copy(StgClosure **p, const StgInfoTable *info,
@@ -387,6 +384,7 @@ evacuate_large(StgPtr p)
      - link_field must be STATIC_LINK(q)
    ------------------------------------------------------------------------- */
 
+WARD_NEED(sharing_sm_lock)
 STATIC_INLINE void
 evacuate_static_object (StgClosure **link_field, StgClosure *q)
 {
@@ -426,6 +424,7 @@ evacuate_static_object (StgClosure **link_field, StgClosure *q)
    It is assumed that objects in the struct live in the same generation
    as the struct itself all the time.
    ------------------------------------------------------------------------- */
+WARD_NEED(sharing_sm_lock)
 STATIC_INLINE void
 evacuate_compact (StgPtr p)
 {
@@ -581,7 +580,6 @@ evacuate_compact (StgPtr p)
    ------------------------------------------------------------------------- */
 
 WARD_NEED(sharing_sm_lock)
-WARD_NEED(may_call_sm)
 REGPARM1 GNUC_ATTR_HOT void
 evacuate(StgClosure **p)
 {
@@ -980,7 +978,6 @@ loop:
    -------------------------------------------------------------------------- */
 
 WARD_NEED(sharing_sm_lock)
-WARD_NEED(may_call_sm)
 void
 evacuate_BLACKHOLE(StgClosure **p)
 {
@@ -1129,7 +1126,6 @@ unchain_thunk_selectors(StgSelector *p, StgClosure *val)
    the evac parameter.
    -------------------------------------------------------------------------- */
 
-WARD_NEED(may_call_sm)
 WARD_NEED(sharing_sm_lock)
 static void
 eval_thunk_selector (StgClosure **q, StgSelector *p, bool evac)
