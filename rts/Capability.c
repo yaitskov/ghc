@@ -525,7 +525,7 @@ releaseCapability_ (Capability* cap,
     ASSERT_PARTIAL_CAPABILITY_INVARIANTS(cap,task);
     ASSERT_RETURNING_TASKS(cap,task);
 
-    set_running_task(cap);
+    set_running_task(cap, NULL);
 
     // Check to see whether a worker thread can be given
     // the go-ahead to return the result of an external call..
@@ -637,7 +637,7 @@ enqueueWorker (Capability* cap USED_IF_THREADS)
         releaseCapability_(cap,false);
         // hold the lock until after workerTaskStop; c.f. scheduleWorker()
         workerTaskStop(task);
-        RELEASE_MUTEX(&cap->lock);
+        RELEASE_LOCK(&cap->lock);
         shutdownThread();
     }
 }
@@ -925,7 +925,7 @@ yieldCapability (Capability** pCap, Task *task, bool gcAllowed)
     releaseCapability_(cap, false);
 
     if (isWorker(task) || isBoundTask(task)) {
-        release_capability(lock);
+        release_capability_lock(cap);
         cap = waitForWorkerCapability(task);
     } else {
         // Not a worker Task, or a bound Task.  The only way we can be woken up
@@ -934,7 +934,7 @@ yieldCapability (Capability** pCap, Task *task, bool gcAllowed)
         // The Task waiting for this Capability does not have it
         // yet, so we can be sure to be woken up later. (see #10545)
         newReturningTask(cap,task);
-        release_capability(lock);
+        release_capability_lock(cap);
         cap = waitForReturnCapability(task);
     }
 
@@ -1048,6 +1048,7 @@ tryGrabCapability (Capability *cap, Task *task)
  *
  * ------------------------------------------------------------------------- */
 
+#if defined(THREADED_RTS)
 // Returns true if successful.
 WARD_NEED(capability_lock_held)
 WARD_REVOKE(capability_lock_held)
@@ -1056,6 +1057,7 @@ tryShutdownCapability (Capability *cap USED_IF_THREADS,
                        Task *task USED_IF_THREADS,
                        bool safe USED_IF_THREADS)
 {
+    set_running_task(cap, task);
     ASSERT(sched_state == SCHED_SHUTTING_DOWN);
 
     if (cap->spare_workers) {
@@ -1119,6 +1121,7 @@ tryShutdownCapability (Capability *cap USED_IF_THREADS,
         return true;
     }
 }
+#endif
 
 static void
 shutdownCapability (Capability *cap USED_IF_THREADS,
@@ -1144,7 +1147,6 @@ shutdownCapability (Capability *cap USED_IF_THREADS,
             yieldThread();
 
         } else {
-            set_running_task(cap, task);
             if (tryShutdownCapability(cap, task, safe)) {
                 break;
             }
