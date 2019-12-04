@@ -1689,7 +1689,7 @@ scheduleDoGC (Capability **pcap, Task *task USED_IF_THREADS,
             }
             ASSERT(n_idle == 0);
 
-            //was_syncing = requestSync(pcap, task, &sync, &prev_sync);
+            was_syncing = requestSync(pcap, task, &sync, &prev_sync);
             cap = *pcap;
             if (was_syncing) {
                 stgFree(idle_cap);
@@ -1981,7 +1981,7 @@ delete_threads_and_gc:
             // FIXME again: perhaps we should throw a synchronous exception
             // instead an asynchronous one, or have a way for the program to
             // register a handler to be called when heap overflow happens.
-            //throwToSelf(cap, main_thread, heapOverflow_closure);
+            throwToSelf(cap, main_thread, heapOverflow_closure);
         }
     }
 
