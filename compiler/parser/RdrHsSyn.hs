@@ -132,6 +132,7 @@ import ApiAnnotation
 import Data.List
 import GHC.Driver.Session ( WarningFlag(..), DynFlags )
 import ErrUtils ( Messages )
+import PrelInfo ( wiredInNameTyThing_maybe )
 
 import Control.Monad
 import Text.ParserCombinators.ReadP as ReadP
