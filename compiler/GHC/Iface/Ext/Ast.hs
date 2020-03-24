@@ -42,6 +42,7 @@ import TcRnTypes
 import GHC.Iface.Make             ( mkIfaceExports )
 import Panic
 import Maybes
+import qualified Data.ByteString.Short as SBS
 
 import GHC.Iface.Ext.Types
 import GHC.Iface.Ext.Utils
@@ -246,7 +247,7 @@ mkHieFileWithSource src_file src ms ts rs = do
       , hie_asts = asts'
       -- mkIfaceExports sorts the AvailInfos for stability
       , hie_exports = mkIfaceExports (tcg_exports ts)
-      , hie_hs_src = src
+      , hie_hs_src = SBS.toShort src
       }
 
 getCompressedAsts :: TypecheckedSource -> RenamedSource
