@@ -32,7 +32,7 @@ import {-# SOURCE #-} GHC.Core.Unfold( mkUnfolding )
 import GHC.Core.Make ( FloatBind(..) )
 import GHC.Core.Ppr  ( pprCoreBindings, pprRules )
 import GHC.Core.Op.OccurAnal( occurAnalyseExpr, occurAnalysePgm )
-import Literal  ( Literal(LitString) )
+import Literal  ( LiteralX(LitString), Literal)
 import Id
 import IdInfo   ( unfoldingInfo, setUnfoldingInfo, setRuleInfo, IdInfo (..) )
 import Var      ( isNonCoVarId )

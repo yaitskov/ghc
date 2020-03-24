@@ -10,7 +10,7 @@ import FastString
 import GHC.Core.Type
 import GHC.Core
 import GHC.Core.Make
-import Literal ( Literal(..) )
+import Literal ( LiteralX(..) )
 import TcEvidence
 import GHC.Driver.Types
 import GHC.Driver.Session
