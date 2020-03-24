@@ -312,7 +312,7 @@ warnUnusedPackages = do
           = map (getPackageDetails dflags)
           . nub . sort
           . map moduleUnitId
-          . moduleEnvKeys
+          . pitKeys
           $ pit
 
         requestedArgs = mapMaybe packageArg (packageFlags dflags)
