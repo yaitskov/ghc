@@ -625,7 +625,7 @@ type HomePackageTable  = DModuleNameEnv HomeModInfo
 data CompactRegion = forall a . CompactRegion (Compact a) | EmptyRegion
 
 -- | Helps us find information about modules in the imported packages
-data PackageIfaceTable = PackageIfaceTable CompactRegion (ModuleEnv ModIface)
+data PackageIfaceTable = PackageIfaceTable (Maybe CompactRegion) (ModuleEnv ModIface)
         -- Domain = modules in the imported packages
 
 -- | Constructs an empty HomePackageTable
@@ -633,14 +633,20 @@ emptyHomePackageTable :: HomePackageTable
 emptyHomePackageTable  = emptyUDFM
 
 -- | Constructs an empty PackageIfaceTable
+emptyPackageIfaceTableWithCompact :: Maybe CompactRegion -> PackageIfaceTable
+emptyPackageIfaceTableWithCompact c = PackageIfaceTable c emptyModuleEnv
+
+-- | Constructs an empty PackageIfaceTable
 emptyPackageIfaceTable :: PackageIfaceTable
-emptyPackageIfaceTable = PackageIfaceTable EmptyRegion emptyModuleEnv
+emptyPackageIfaceTable = emptyPackageIfaceTableWithCompact Nothing
 
 lookupPIT :: PackageIfaceTable -> Module -> Maybe ModIface
 lookupPIT (PackageIfaceTable _ pit) m = lookupModuleEnv pit m
 
 extendPIT :: PackageIfaceTable -> Module -> ModIface -> IO PackageIfaceTable
-extendPIT (PackageIfaceTable comp pit) m mi = do
+extendPIT (PackageIfaceTable Nothing pit) m mi =
+  return $ PackageIfaceTable Nothing (extendModuleEnv pit m mi)
+extendPIT (PackageIfaceTable (Just comp) pit) m mi = do
   let raw_iface = forgetModIfaceCaches mi
   compact_region <- case comp of
     CompactRegion c -> do
@@ -648,7 +654,7 @@ extendPIT (PackageIfaceTable comp pit) m mi = do
     EmptyRegion -> do
       compact raw_iface
   let compacted_iface = initModIfaceCaches $ getCompact compact_region
-  return (PackageIfaceTable (CompactRegion compact_region) (extendModuleEnv pit m compacted_iface))
+  return (PackageIfaceTable (Just (CompactRegion compact_region)) (extendModuleEnv pit m compacted_iface))
 
 extendPITFake :: PackageIfaceTable -> Module -> PackageIfaceTable
 extendPITFake (PackageIfaceTable c pit) mod =
