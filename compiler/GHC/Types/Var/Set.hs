@@ -23,7 +23,7 @@ module GHC.Types.Var.Set (
         sizeVarSet, seqVarSet,
         elemVarSetByKey, partitionVarSet,
         pluralVarSet, pprVarSet,
-        nonDetFoldVarSet, nonDetStrictFoldVarSet,
+        nonDetStrictFoldVarSet,
 
         -- * Deterministic Var set types
         DVarSet, DIdSet, DTyVarSet, DTyCoVarSet,
@@ -153,9 +153,6 @@ allVarSet = uniqSetAll
 
 mapVarSet :: Uniquable b => (a -> b) -> UniqSet a -> UniqSet b
 mapVarSet = mapUniqSet
-
-nonDetFoldVarSet :: (Var -> a -> a) -> a -> VarSet -> a
-nonDetFoldVarSet = nonDetFoldUniqSet
 
 nonDetStrictFoldVarSet :: (Var -> a -> a) -> a -> VarSet -> a
 nonDetStrictFoldVarSet = nonDetStrictFoldUniqSet

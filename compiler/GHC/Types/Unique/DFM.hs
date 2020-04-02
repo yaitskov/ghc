@@ -57,7 +57,6 @@ module GHC.Types.Unique.DFM (
 
         udfmToList,
         udfmToUfm,
-        nonDetFoldUDFM,
         nonDetStrictFoldUDFM,
         alwaysUnsafeUfmToUdfm,
     ) where
@@ -273,13 +272,10 @@ elemUDFM k (UDFM m _i) = M.member (getKey $ getUnique k) m
 foldUDFM :: (elt -> a -> a) -> a -> UniqDFM elt -> a
 foldUDFM k z m = foldr k z (eltsUDFM m)
 
--- | Performs a nondeterministic fold over the UniqDFM.
+-- | Performs a nondeterministic strict fold over the UniqDFM.
 -- It's O(n), same as the corresponding function on `UniqFM`.
 -- If you use this please provide a justification why it doesn't introduce
 -- nondeterminism.
-nonDetFoldUDFM :: (elt -> a -> a) -> a -> UniqDFM elt -> a
-nonDetFoldUDFM k z (UDFM m _i) = foldr k z $ map taggedFst $ M.elems m
-
 nonDetStrictFoldUDFM :: (elt -> a -> a) -> a -> UniqDFM elt -> a
 nonDetStrictFoldUDFM k z (UDFM m _i) = foldl' k' z m
   where

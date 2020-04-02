@@ -42,9 +42,7 @@ module GHC.Types.Unique.Set (
         unsafeUFMToUniqSet,
         nonDetEltsUniqSet,
         nonDetKeysUniqSet,
-        nonDetFoldUniqSet,
         nonDetStrictFoldUniqSet,
-        nonDetFoldUniqSet_Directly
     ) where
 
 import GhcPrelude
@@ -164,17 +162,8 @@ nonDetKeysUniqSet = nonDetKeysUFM . getUniqSet'
 -- See Note [Deterministic UniqFM] to learn about nondeterminism.
 -- If you use this please provide a justification why it doesn't introduce
 -- nondeterminism.
-nonDetFoldUniqSet :: (elt -> a -> a) -> a -> UniqSet elt -> a
-nonDetFoldUniqSet c n (UniqSet s) = nonDetFoldUFM c n s
-
 nonDetStrictFoldUniqSet :: (elt -> a -> a) -> a -> UniqSet elt -> a
 nonDetStrictFoldUniqSet c n (UniqSet s) = nonDetStrictFoldUFM c n s
-
--- See Note [Deterministic UniqFM] to learn about nondeterminism.
--- If you use this please provide a justification why it doesn't introduce
--- nondeterminism.
-nonDetFoldUniqSet_Directly:: (Unique -> elt -> a -> a) -> a -> UniqSet elt -> a
-nonDetFoldUniqSet_Directly f n (UniqSet s) = nonDetFoldUFM_Directly f n s
 
 -- See Note [UniqSet invariant]
 mapUniqSet :: Uniquable b => (a -> b) -> UniqSet a -> UniqSet b
