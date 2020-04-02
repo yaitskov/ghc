@@ -1582,11 +1582,13 @@ placeJoinCeiling le@(LE { le_ctxt_lvl = lvl })
 maxFvLevel :: (Var -> Bool) -> LevelEnv -> DVarSet -> Level
 maxFvLevel max_me env var_set
   = nonDetStrictFoldDVarSet (maxIn max_me env) tOP_LEVEL var_set
+    -- It's OK to use a non-deterministic fold here because maxIn commutes.
 
 maxFvLevel' :: (Var -> Bool) -> LevelEnv -> TyCoVarSet -> Level
 -- Same but for TyCoVarSet
 maxFvLevel' max_me env var_set
   = nonDetStrictFoldUniqSet (maxIn max_me env) tOP_LEVEL var_set
+    -- It's OK to use a non-deterministic fold here because maxIn commutes.
 
 maxIn :: (Var -> Bool) -> LevelEnv -> InVar -> Level -> Level
 maxIn max_me (LE { le_lvl_env = lvl_env, le_env = id_env }) in_var lvl

@@ -659,8 +659,8 @@ niSubstTvSet :: TvSubstEnv -> TyCoVarSet -> TyCoVarSet
 -- This is used in the occurs check, before extending the substitution
 niSubstTvSet tsubst tvs
   = nonDetStrictFoldUniqSet (unionVarSet . get) emptyVarSet tvs
-  -- It's OK to nonDetStrictFoldUFM here because we immediately forget the
-  -- ordering by creating a set.
+  -- It's OK to use a non-deterministic fold here because we immediately forget
+  -- the ordering by creating a set.
   where
     get tv
       | Just ty <- lookupVarEnv tsubst tv
