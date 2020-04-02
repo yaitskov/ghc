@@ -863,7 +863,7 @@ findNeededEvVars ev_binds seeds
   where
    also_needs :: VarSet -> VarSet
    also_needs needs = nonDetStrictFoldUniqSet add emptyVarSet needs
-     -- It's OK to use nonDetStrictFoldUFM here because we immediately
+     -- It's OK to use a non-deterministic fold here because we immediately
      -- forget about the ordering by creating a set
 
    add :: Var -> VarSet -> VarSet

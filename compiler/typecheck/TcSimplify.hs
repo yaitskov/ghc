@@ -1863,6 +1863,8 @@ neededEvVars implic@(Implic { ic_given = givens
 
       ; let seeds1        = foldr add_implic_seeds old_needs implics
             seeds2        = nonDetStrictFoldEvBindMap add_wanted seeds1 ev_binds
+                            -- It's OK to use a non-deterministic fold here
+                            -- because add_wanted is commutative
             seeds3        = seeds2 `unionVarSet` tcvs
             need_inner    = findNeededEvVars ev_binds seeds3
             live_ev_binds = filterEvBindMap (needed_ev_bind need_inner) ev_binds

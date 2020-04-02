@@ -64,7 +64,7 @@ addNode k node graph
         -- add back conflict edges from other nodes to this one
         map_conflict =
           nonDetStrictFoldUniqSet
-            -- It's OK to use nonDetStrictFoldUFM here because the
+            -- It's OK to use a non-deterministic fold here because the
             -- operation is commutative
             (adjustUFM_C (\n -> n { nodeConflicts =
                                       addOneToUniqSet (nodeConflicts n) k}))
@@ -74,7 +74,7 @@ addNode k node graph
         -- add back coalesce edges from other nodes to this one
         map_coalesce =
           nonDetStrictFoldUniqSet
-            -- It's OK to use nonDetStrictFoldUFM here because the
+            -- It's OK to use a non-deterministic fold here because the
             -- operation is commutative
             (adjustUFM_C (\n -> n { nodeCoalesce =
                                       addOneToUniqSet (nodeCoalesce n) k}))
@@ -477,8 +477,8 @@ freezeNode k
                                 -- If the edge isn't actually in the coelesce set then just ignore it.
 
         fm2     = nonDetStrictFoldUniqSet (adjustUFM_C (freezeEdge k)) fm1
-                    -- It's OK to use nonDetStrictFoldUFM here because the operation
-                    -- is commutative
+                    -- It's OK to use a non-deterministic fold here because the
+                    -- operation is commutative
                         $ nodeCoalesce node
 
     in  fm2
