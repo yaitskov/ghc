@@ -37,7 +37,7 @@ module GHC.Types.Var.Set (
         intersectsDVarSet, disjointDVarSet,
         isEmptyDVarSet, delDVarSet, delDVarSetList,
         minusDVarSet,
-        foldDVarSet, nonDetStrictFoldDVarSet,
+        nonDetStrictFoldDVarSet,
         filterDVarSet, mapDVarSet,
         dVarSetMinusVarSet, anyDVarSet, allDVarSet,
         transCloDVarSet,
@@ -294,9 +294,6 @@ minusDVarSet = minusUniqDSet
 
 dVarSetMinusVarSet :: DVarSet -> VarSet -> DVarSet
 dVarSetMinusVarSet = uniqDSetMinusUniqSet
-
-foldDVarSet :: (Var -> a -> a) -> a -> DVarSet -> a
-foldDVarSet = foldUniqDSet
 
 nonDetStrictFoldDVarSet :: (Var -> a -> a) -> a -> DVarSet -> a
 nonDetStrictFoldDVarSet = nonDetStrictFoldUniqDSet
