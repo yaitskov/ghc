@@ -20,6 +20,7 @@ module TcEvidence (
   filterEvBindMap,
   isEmptyEvBindMap,
   evBindMapToVarSet,
+  varSetMinusEvBindMap,
   EvBind(..), emptyTcEvBinds, isEmptyTcEvBinds, mkGivenEvBind, mkWantedEvBind,
   evBindVar, isCoEvBindsVar,
 
@@ -513,6 +514,9 @@ filterEvBindMap k (EvBindMap { ev_bind_varenv = env })
 
 evBindMapToVarSet :: EvBindMap -> VarSet
 evBindMapToVarSet (EvBindMap dve) = unsafeUFMToUniqSet (mapUFM evBindVar (udfmToUfm dve))
+
+varSetMinusEvBindMap :: VarSet -> EvBindMap -> VarSet
+varSetMinusEvBindMap vs (EvBindMap dve) = vs `uniqSetMinusUDFM` dve
 
 instance Outputable EvBindMap where
   ppr (EvBindMap m) = ppr m

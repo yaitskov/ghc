@@ -1892,9 +1892,6 @@ neededEvVars implic@(Implic { ic_given = givens
      | is_given  = ev_var `elemVarSet` needed
      | otherwise = True   -- Keep all wanted bindings
 
-   varSetMinusEvBindMap :: VarSet -> EvBindMap -> VarSet
-   varSetMinusEvBindMap vs ebm = uniqSetMinusUDFM vs (ev_bind_varenv ebm)
-
    add_wanted :: EvBind -> VarSet -> VarSet
    add_wanted (EvBind { eb_is_given = is_given, eb_rhs = rhs }) needs
      | is_given  = needs  -- Add the rhs vars of the Wanted bindings only
