@@ -98,6 +98,9 @@ uniqDSetIntersectUniqSet :: UniqDSet a -> UniqSet b -> UniqDSet a
 uniqDSetIntersectUniqSet xs ys
   = UniqDSet (udfmIntersectUFM (getUniqDSet xs) (getUniqSet ys))
 
+-- See Note [Deterministic UniqFM] to learn about nondeterminism.
+-- If you use this please provide a justification why it doesn't introduce
+-- nondeterminism.
 nonDetStrictFoldUniqDSet :: (a -> b -> b) -> b -> UniqDSet a -> b
 nonDetStrictFoldUniqDSet f acc (UniqDSet s) = nonDetStrictFoldUDFM f acc s
 

@@ -154,6 +154,9 @@ allVarSet = uniqSetAll
 mapVarSet :: Uniquable b => (a -> b) -> UniqSet a -> UniqSet b
 mapVarSet = mapUniqSet
 
+-- See Note [Deterministic UniqFM] to learn about nondeterminism.
+-- If you use this please provide a justification why it doesn't introduce
+-- nondeterminism.
 nonDetStrictFoldVarSet :: (Var -> a -> a) -> a -> VarSet -> a
 nonDetStrictFoldVarSet = nonDetStrictFoldUniqSet
 
@@ -292,6 +295,9 @@ minusDVarSet = minusUniqDSet
 dVarSetMinusVarSet :: DVarSet -> VarSet -> DVarSet
 dVarSetMinusVarSet = uniqDSetMinusUniqSet
 
+-- See Note [Deterministic UniqFM] to learn about nondeterminism.
+-- If you use this please provide a justification why it doesn't introduce
+-- nondeterminism.
 nonDetStrictFoldDVarSet :: (Var -> a -> a) -> a -> DVarSet -> a
 nonDetStrictFoldDVarSet = nonDetStrictFoldUniqDSet
 

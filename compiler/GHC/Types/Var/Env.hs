@@ -583,6 +583,9 @@ lookupDVarEnv = lookupUDFM
 foldDVarEnv :: (a -> b -> b) -> b -> DVarEnv a -> b
 foldDVarEnv = foldUDFM
 
+-- See Note [Deterministic UniqFM] to learn about nondeterminism.
+-- If you use this please provide a justification why it doesn't introduce
+-- nondeterminism.
 nonDetStrictFoldDVarEnv :: (a -> b -> b) -> b -> DVarEnv a -> b
 nonDetStrictFoldDVarEnv = nonDetStrictFoldUDFM
 
