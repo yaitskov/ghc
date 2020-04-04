@@ -81,8 +81,7 @@ unionUniqDSets :: UniqDSet a -> UniqDSet a -> UniqDSet a
 unionUniqDSets (UniqDSet s) (UniqDSet t) = UniqDSet (plusUDFM s t)
 
 unionManyUniqDSets :: [UniqDSet a] -> UniqDSet a
-unionManyUniqDSets [] = emptyUniqDSet
-unionManyUniqDSets sets = foldr1 unionUniqDSets sets
+unionManyUniqDSets = foldl' (flip unionUniqDSets) emptyUniqDSet
 
 minusUniqDSet :: UniqDSet a -> UniqDSet a -> UniqDSet a
 minusUniqDSet (UniqDSet s) (UniqDSet t) = UniqDSet (minusUDFM s t)
