@@ -40,7 +40,7 @@ Language
 
   There is a chance we will tweak the lookup scheme in the future, to make this
   workaround unnecessary.
-  
+
 Compiler
 ~~~~~~~~
 
@@ -51,6 +51,12 @@ GHCi
 
 Runtime system
 ~~~~~~~~~~~~~~
+
+ - Windows now uses the large address space allocator by default.
+   In extreme cases we saw improvements by up to 3% decreased runtime.
+
+   The downside is that haskell apps run on older (Pre Win-8.1/Server 2012)
+   systems will have higher memory footprints.
 
 Template Haskell
 ~~~~~~~~~~~~~~~~
