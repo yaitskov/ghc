@@ -39,7 +39,7 @@ import GHC.Types.Demand ( argOneShots, argsOneShots )
 import Digraph          ( SCC(..), Node(..)
                         , stronglyConnCompFromEdgedVerticesUniq
                         , stronglyConnCompFromEdgedVerticesUniqR )
-import PrelNames( runRWKey )
+import GHC.Builtin.Names( runRWKey )
 import GHC.Types.Unique
 import GHC.Types.Unique.FM
 import GHC.Types.Unique.Set

@@ -28,7 +28,7 @@ import GHC.Types.Id.Make ( realWorldPrimId )
 import GHC.Core.Utils
 import GHC.Core.Arity
 import GHC.Core.FVs
-import GHC.Core.Op.Monad ( CoreToDo(..) )
+import GHC.Core.Opt.Monad ( CoreToDo(..) )
 import GHC.Core.Lint    ( endPassIO )
 import GHC.Core
 import GHC.Core.Make hiding( FloatBind(..) )   -- We use our own FloatBind here

@@ -37,7 +37,7 @@ import GHC.Core.DataCon
    , StrictnessMark (..) )
 import GHC.Core.Opt.Monad ( Tick(..), SimplMode(..) )
 import GHC.Core
-import PrelNames        ( runRWKey )
+import GHC.Builtin.Names( runRWKey )
 import GHC.Types.Demand ( StrictSig(..), dmdTypeDepth, isStrictDmd
                         , mkClosedStrictSig, topDmd, botDiv )
 import GHC.Types.Cpr    ( mkCprSig, botCpr )

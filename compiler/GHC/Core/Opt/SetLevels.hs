@@ -98,7 +98,7 @@ import GHC.Types.Basic  ( Arity, RecFlag(..), isRec )
 import GHC.Core.DataCon ( dataConOrigResTy )
 import GHC.Builtin.Types
 import GHC.Types.Unique.Supply
-import PrelNames        ( runRWKey )
+import GHC.Builtin.Names      ( runRWKey )
 import Util
 import Outputable
 import FastString
