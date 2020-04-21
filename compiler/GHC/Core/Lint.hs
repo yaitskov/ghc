@@ -774,10 +774,9 @@ type LintedId       = Id
 
 -- | Lint an expression cast through the given coercion, returning the type
 -- resulting from the cast.
-lintCastExpr :: CoreExpr -> Coercion -> LintM LintedType
-lintCastExpr expr co
-  = do { expr_ty <- markAllJoinsBad $ lintCoreExpr expr
-       ; co' <- lintCoercion co
+lintCastExpr :: CoreExpr -> LintedType -> Coercion -> LintM LintedType
+lintCastExpr expr expr_ty co
+  = do { co' <- lintCoercion co
        ; let (Pair from_ty to_ty, role) = coercionKindRole co'
        ; checkValueType to_ty $
          text "target of cast" <+> quotes (ppr co')
@@ -802,7 +801,8 @@ lintCoreExpr (Lit lit)
   = return (literalType lit)
 
 lintCoreExpr (Cast expr co)
-  = markAllJoinsBad $ lintCastExpr expr co
+  = do expr_ty <- markAllJoinsBad   $ lintCoreExpr expr
+       lintCastExpr expr expr_ty co
 
 lintCoreExpr (Tick tickish expr)
   = do case tickish of
@@ -868,7 +868,15 @@ lintCoreExpr e@(App _ _)
   , [arg_ty1, arg_ty2, arg3] <- args
   = do { fun_ty1 <- lintCoreArg (idType fun) arg_ty1
        ; fun_ty2 <- lintCoreArg fun_ty1      arg_ty2
-       ; arg3_ty <- lintJoinLams 1 (Just fun) arg3
+         -- The simplifier pushes casts out of the continuation lambda;
+         -- consequently we need to handle the case that the continuation is a
+         -- cast lambda. See Note [Casts and lambdas] in
+         -- GHC.Core.Opt.Simplify.Utils.
+       ; arg3_ty <- case arg3 of
+                      Cast expr co -> do
+                        expr_ty <- lintJoinLams 1 (Just fun) expr
+                        lintCastExpr expr expr_ty co
+                      _ -> lintJoinLams 1 (Just fun) arg3
        ; lintValApp arg3 fun_ty2 arg3_ty }
 
   | Var fun <- fun
