@@ -710,9 +710,6 @@ lintJoinLams join_arity enforce rhs
   where
     go 0 rhs             = lintCoreExpr rhs
     go n (Lam var expr)  = lintLambda var $ go (n-1) expr
-    go n (Cast expr co)  = do { _ <- go n expr
-                              ; lintCastExpr expr co
-                              }
       -- N.B. join points can be cast. e.g. we consider ((\x -> ...) `cast` ...)
       -- to be a join point at join arity 1.
     go n _other | Just bndr <- enforce -- Join point with too few RHS lambdas
