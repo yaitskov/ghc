@@ -88,7 +88,8 @@ module GHC.Types.SrcLoc (
         mapLoc,
 
         -- ** Combining and comparing Located values
-        eqLocated, cmpLocated, combineLocs, addCLoc,
+        eqLocated, cmpLocated, cmpBufSpan,
+        combineLocs, addCLoc,
         leftmost_smallest, leftmost_largest, rightmost_smallest,
         spans, isSubspanOf, isRealSubspanOf,
         sortLocated, sortRealLocated,
@@ -725,6 +726,17 @@ eqLocated a b = unLoc a == unLoc b
 -- | Tests the ordering of the two located things
 cmpLocated :: Ord a => GenLocated l a -> GenLocated l a -> Ordering
 cmpLocated a b = unLoc a `compare` unLoc b
+
+-- | Compare the 'BufSpan' of two located things.
+--
+-- Precondition: both operands have an associated 'BufSpan'.
+cmpBufSpan :: HasDebugCallStack => Located a -> Located a -> Ordering
+cmpBufSpan (L l1 _) (L l2  _)
+  | Just a <- getBufSpan l1
+  , Just b <- getBufSpan l2
+  = compare a b
+
+  | otherwise = panic "cmpBufSpan: no BufSpan"
 
 instance (Outputable l, Outputable e) => Outputable (GenLocated l e) where
   ppr (L l e) = -- TODO: We can't do this since Located was refactored into

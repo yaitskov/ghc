@@ -211,6 +211,25 @@ mkHdkM = coerce
 unHdkM = coerce
 
 -- See Note [Adding Haddock comments to the syntax tree].
+--
+-- 'HdkA' provides a way to propagate location information from surrounding
+-- computations:
+--
+--   left_neighbour <*> HdkA inner_span inner_m <*> right_neighbour
+--
+-- Here, the following holds:
+--
+-- * the 'left_neighbour' will only see Haddock comments until 'bufSpanStart' of 'inner_span'
+-- * the 'right_neighbour' will only see Haddock comments after 'bufSpanEnd' of 'inner_span'
+-- * the 'inner_m' will only see Haddock comments between its 'left_neighbour' and its 'right_neighbour'
+--
+-- In other words, every computation:
+--
+--  * delimits the surrounding computations
+--  * is delimited by the surrounding computation
+--
+--  Therefore, a 'HdkA' computation must be always considered in the context in
+--  which it is used.
 data HdkA a = HdkA (Maybe BufSpan) (HdkM a)
   deriving (Functor)
 
@@ -219,19 +238,28 @@ instance Applicative HdkA where
   HdkA l1 m1 <*> HdkA l2 m2 =
     HdkA (l1 <> l2) (delim1 m1 <*> delim2 m2)
     where
+      -- Delimit the LHS by the location information from the RHS
       delim1 = inLocRange (locRangeTo (fmap @Maybe bufSpanStart l2))
+      -- Delimit the RHS by the location information from the LHS
       delim2 = inLocRange (locRangeFrom (fmap @Maybe bufSpanEnd l1))
 
 runHdkA :: HdkA a -> [PsLocated HdkComment] -> (a, [PsLocated HdkComment])
 runHdkA (HdkA _ m) = unHdkM m mempty
 
--- | Let the neighbours know about an item at this location.
+-- Let the neighbours know about an item at this location.
 -- See Note [Adding Haddock comments to the syntax tree].
 registerHdkA :: Located a -> HdkA ()
 registerHdkA a = HdkA (getBufSpan (getLoc a)) (pure ())
 
-delimitHdkA :: SrcSpan -> HdkA a -> HdkA a
-delimitHdkA l' (HdkA l m) = HdkA (getBufSpan l' <> l) m
+-- Extend the declared location span of a 'HdkA' computation:
+--
+--    left_neighbour <*> extendHdkA l x <*> right_neighbour
+--
+-- The declared location of 'x' now includes 'l', so that the surrounding
+-- computations 'left_neighbour' and 'right_neighbour' will not look for
+-- Haddock comments inside the 'l' location span.
+extendHdkA :: SrcSpan -> HdkA a -> HdkA a
+extendHdkA l' (HdkA l m) = HdkA (getBufSpan l' <> l) m
 
 concatLHsDocString :: [LHsDocString] -> Maybe LHsDocString
 concatLHsDocString xs = L l <$> concatDocs docs
@@ -266,9 +294,9 @@ instance HasHaddock (Located HsModule) where
 
 instance HasHaddock (Located [LIE GhcPs]) where
   addHaddock (L l_exports exports) =
-    delimitHdkA l_exports $ do
+    extendHdkA l_exports $ do
       exports' <- addHaddockInterleaveItems NoLayoutInfo mkDocIE exports
-      registerHdkA (L (srcLocSpan (srcSpanEnd l_exports)) ()) -- Do not conume comments after the closing parenthesis
+      registerHdkA (L (srcLocSpan (srcSpanEnd l_exports)) ()) -- Do not consume comments after the closing parenthesis
       pure $ L l_exports exports'
 
 instance HasHaddock (LIE GhcPs) where
@@ -363,6 +391,26 @@ mkDocDecl layout_info (L l_comment hdk_comment)
         HdkCommentNamed s doc -> DocCommentNamed s doc
         HdkCommentSection n doc -> DocGroup n doc
   where
+    --  'indent_mismatch' checks if the documentation comment has the exact
+    --  indentation level expected by the parent node.
+    --
+    --  For example, when extracting documentation comments between class
+    --  method declarations, there are three cases to consider:
+    --
+    --  1. Indent matches (indent_mismatch=False):
+    --         class C a where
+    --           f :: a -> a
+    --           -- ^ doc on f
+    --
+    --  2. Indented too much (indent_mismatch=True):
+    --         class C a where
+    --           f :: a -> a
+    --             -- ^ indent mismatch
+    --
+    --  3. Indented too little (indent_mismatch=True):
+    --         class C a where
+    --           f :: a -> a
+    --         -- ^ indent mismatch
     indent_mismatch = case layout_info of
       NoLayoutInfo -> False
       ExplicitBraces -> False
@@ -387,7 +435,7 @@ mkDocPrev _ = Nothing
 
 instance HasHaddock (LHsDecl GhcPs) where
   addHaddock ldecl =
-    delimitHdkA (getLoc ldecl) $
+    extendHdkA (getLoc ldecl) $
     for @Located ldecl addHaddock
 
 instance HasHaddock (HsDecl GhcPs) where
@@ -504,18 +552,18 @@ instance HasHaddock (HsDecl GhcPs) where
 
 instance HasHaddock (HsDeriving GhcPs) where
   addHaddock lderivs =
-    delimitHdkA (getLoc lderivs) $
+    extendHdkA (getLoc lderivs) $
     for @Located lderivs addHaddock
 
 instance HasHaddock (LHsDerivingClause GhcPs) where
   addHaddock lderiv =
-    delimitHdkA (getLoc lderiv) $
+    extendHdkA (getLoc lderiv) $
     for @Located lderiv $ \deriv ->
     case deriv of
       HsDerivingClause { deriv_clause_strategy, deriv_clause_tys } -> do
         traverse_ @Maybe registerHdkA deriv_clause_strategy
         deriv_clause_tys' <-
-          delimitHdkA (getLoc deriv_clause_tys) $
+          extendHdkA (getLoc deriv_clause_tys) $
           for @Located deriv_clause_tys addHaddock
         pure HsDerivingClause
           { deriv_clause_ext = noExtField,
@@ -645,7 +693,7 @@ instance HasHaddock (LHsSigType GhcPs) where
 
 instance HasHaddock (LHsType GhcPs) where
   addHaddock ltype =
-    delimitHdkA (getLoc ltype) $
+    extendHdkA (getLoc ltype) $
     for @Located ltype $ \t ->
     case t of
       HsForAllTy _ fvf bndrs body -> do
@@ -888,7 +936,11 @@ flattenBindsAndSigs
       [LTyFamInstDecl GhcPs], [LDataFamInstDecl GhcPs], [LDocDecl])
   -> [LHsDecl GhcPs]
 flattenBindsAndSigs (all_bs, all_ss, all_ts, all_tfis, all_dfis, all_docs) =
-  mergeListsBy cmp [
+  -- 'cmpBufSpan' is safe here with the following assumptions:
+  --
+  -- * 'LHsDecl' produced by 'decl_cls' in Parser.y always have a 'BufSpan'
+  -- * 'partitionBindsAndSigs' does not discard this 'BufSpan'
+  mergeListsBy cmpBufSpan [
     map_l (\b -> ValD noExtField b) (bagToList all_bs),
     map_l (\s -> SigD noExtField s) all_ss,
     map_l (\t -> TyClD noExtField (FamDecl noExtField t)) all_ts,
@@ -897,10 +949,5 @@ flattenBindsAndSigs (all_bs, all_ss, all_ts, all_tfis, all_dfis, all_docs) =
     map_l (\d -> DocD noExtField d) all_docs
   ]
   where
-    cmp :: LHsDecl GhcPs -> LHsDecl GhcPs -> Ordering
-    cmp (L (getBufSpan -> Just a) _) (L (getBufSpan -> Just b) _) =
-      compare a b
-    cmp _ _ = panic "flattenBindsAndSigs: HsDecl without BufSpan"
-
     map_l :: (a -> b) -> [Located a] -> [Located b]
     map_l f = map (mapLoc f)
