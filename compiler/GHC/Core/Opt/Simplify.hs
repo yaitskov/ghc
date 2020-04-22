@@ -37,6 +37,7 @@ import GHC.Core.DataCon
    , StrictnessMark (..) )
 import GHC.Core.Opt.Monad ( Tick(..), SimplMode(..) )
 import GHC.Core
+import GHC.Builtin.Types.Prim( realWorldStatePrimTy )
 import GHC.Builtin.Names( runRWKey )
 import GHC.Types.Demand ( StrictSig(..), dmdTypeDepth, isStrictDmd
                         , mkClosedStrictSig, topDmd, botDiv )
@@ -1852,20 +1853,6 @@ rebuildCall env (ArgInfo { ai_fun = fun, ai_args = rev_args, ai_strs = [] }) con
     res     = argInfoExpr fun rev_args
     cont_ty = contResultType cont
 
--- runRW# :: forall (r :: RuntimeRep) (o :: TYPE r). (State# RealWorld -> o) -> o
--- K[ runRW# rr ty (\s. body) ]  -->  runRW rr' ty' (\s. K[ body ])
-rebuildCall env (ArgInfo { ai_fun = fun, ai_args = rev_args }) cont
-  | fun `hasKey` runRWKey
-  , [ ValArg (Lam s body)
-    , TyArg {}, TyArg {} ] <- rev_args
-  = do { (env', s') <- simplLamBndr (zapSubstEnv env) s
-       ; body' <- simplExprC env' body cont
-       ; let arg'  = Lam s' body'
-             ty'   = contResultType cont
-             rr'   = getRuntimeRep ty'
-             call' = mkApps (Var fun) [mkTyArg rr', mkTyArg ty', arg']
-       ; return (emptyFloats env, call') }
-
 ---------- Try rewrite RULES --------------
 -- See Note [Trying rewrite rules]
 rebuildCall env info@(ArgInfo { ai_fun = fun, ai_args = rev_args
@@ -1935,6 +1922,25 @@ rebuildCall env info@(ArgInfo { ai_encl = encl_rules, ai_type = fun_ty
       -- shared. I saw this in nofib 'boyer2', RewriteFuns.onewayunify1
       -- It's worth an 18% improvement in allocation for this
       -- particular benchmark; 5% on 'mate' and 1.3% on 'multiplier'
+
+---------- The runRW# rule. Do this after absorbing all arguments ------
+-- runRW# :: forall (r :: RuntimeRep) (o :: TYPE r). (State# RealWorld -> o) -> o
+-- K[ runRW# rr ty (\s. body) ]  -->  runRW rr' ty' (\s. K[ body ])
+rebuildCall env (ArgInfo { ai_fun = fun, ai_args = rev_args }) cont
+  | fun `hasKey` runRWKey
+  , not (contIsStop cont)  -- Don't fiddle around if the continuation is boring
+  , [ ValArg arg
+    , TyArg {}, TyArg {} ] <- rev_args
+  = do { s <- newId (fsLit "s") realWorldStatePrimTy
+       ; let env'  = zapSubstEnv env `addNewInScopeIds` [s]
+             cont' = ApplyToVal { sc_dup = Simplified, sc_arg = Var s
+                                , sc_env = env', sc_cont = cont }
+       ; body' <- simplExprC env' arg cont'
+       ; let arg'  = Lam s body'
+             ty'   = contResultType cont
+             rr'   = getRuntimeRep ty'
+             call' = mkApps (Var fun) [mkTyArg rr', mkTyArg ty', arg']
+       ; return (emptyFloats env, call') }
 
 ---------- No further useful info, revert to generic rebuild ------------
 rebuildCall env (ArgInfo { ai_fun = fun, ai_args = rev_args }) cont
