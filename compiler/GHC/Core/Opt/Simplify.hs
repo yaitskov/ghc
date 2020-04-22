@@ -1880,14 +1880,36 @@ rebuildCall env info (CastIt co cont)
 rebuildCall env info (ApplyToTy { sc_arg_ty = arg_ty, sc_cont = cont })
   = rebuildCall env (addTyArgTo info arg_ty) cont
 
-rebuildCall env info@(ArgInfo { ai_encl = encl_rules, ai_type = fun_ty
+---------- The runRW# rule. Do this after absorbing all arguments ------
+-- runRW# :: forall (r :: RuntimeRep) (o :: TYPE r). (State# RealWorld -> o) -> o
+-- K[ runRW# rr ty (\s. body) ]  -->  runRW rr' ty' (\s. K[ body ])
+rebuildCall env (ArgInfo { ai_fun = fun, ai_args = rev_args })
+            (ApplyToVal { sc_arg = arg, sc_env = arg_se, sc_cont = cont })
+  | fun `hasKey` runRWKey
+  , not (contIsStop cont)  -- Don't fiddle around if the continuation is boring
+  , [ TyArg {}, TyArg {} ] <- rev_args
+  = do { s <- newId (fsLit "s") realWorldStatePrimTy
+       ; let env'  = (arg_se `setInScopeFromE` env) `addNewInScopeIds` [s]
+             cont' = ApplyToVal { sc_dup = Simplified, sc_arg = Var s
+                                , sc_env = env', sc_cont = cont }
+       ; body' <- simplExprC env' arg cont'
+       ; let arg'  = Lam s body'
+             ty'   = contResultType cont
+             rr'   = getRuntimeRep ty'
+             call' = mkApps (Var fun) [mkTyArg rr', mkTyArg ty', arg']
+       ; return (emptyFloats env, call') }
+
+rebuildCall env info@(ArgInfo { ai_type = fun_ty, ai_encl = encl_rules
                               , ai_strs = str:strs, ai_discs = disc:discs })
             (ApplyToVal { sc_arg = arg, sc_env = arg_se
                         , sc_dup = dup_flag, sc_cont = cont })
+
+  -- Argument is already simplified
   | isSimplified dup_flag     -- See Note [Avoid redundant simplification]
   = rebuildCall env (addValArgTo info' arg) cont
 
-  | str         -- Strict argument
+  -- Strict arguments
+  | str
   , sm_case_case (getMode env)
   = -- pprTrace "Strict Arg" (ppr arg $$ ppr (seIdSubst env) $$ ppr (seInScope env)) $
     simplExprF (arg_se `setInScopeFromE` env) arg
@@ -1895,7 +1917,8 @@ rebuildCall env info@(ArgInfo { ai_encl = encl_rules, ai_type = fun_ty
                           , sc_dup = Simplified, sc_cont = cont })
                 -- Note [Shadowing]
 
-  | otherwise                           -- Lazy argument
+  -- Lazy arguments
+  | otherwise
         -- DO NOT float anything outside, hence simplExprC
         -- There is no benefit (unlike in a let-binding), and we'd
         -- have to be very careful about bogus strictness through
@@ -1922,25 +1945,6 @@ rebuildCall env info@(ArgInfo { ai_encl = encl_rules, ai_type = fun_ty
       -- shared. I saw this in nofib 'boyer2', RewriteFuns.onewayunify1
       -- It's worth an 18% improvement in allocation for this
       -- particular benchmark; 5% on 'mate' and 1.3% on 'multiplier'
-
----------- The runRW# rule. Do this after absorbing all arguments ------
--- runRW# :: forall (r :: RuntimeRep) (o :: TYPE r). (State# RealWorld -> o) -> o
--- K[ runRW# rr ty (\s. body) ]  -->  runRW rr' ty' (\s. K[ body ])
-rebuildCall env (ArgInfo { ai_fun = fun, ai_args = rev_args }) cont
-  | fun `hasKey` runRWKey
-  , not (contIsStop cont)  -- Don't fiddle around if the continuation is boring
-  , [ ValArg arg
-    , TyArg {}, TyArg {} ] <- rev_args
-  = do { s <- newId (fsLit "s") realWorldStatePrimTy
-       ; let env'  = zapSubstEnv env `addNewInScopeIds` [s]
-             cont' = ApplyToVal { sc_dup = Simplified, sc_arg = Var s
-                                , sc_env = env', sc_cont = cont }
-       ; body' <- simplExprC env' arg cont'
-       ; let arg'  = Lam s body'
-             ty'   = contResultType cont
-             rr'   = getRuntimeRep ty'
-             call' = mkApps (Var fun) [mkTyArg rr', mkTyArg ty', arg']
-       ; return (emptyFloats env, call') }
 
 ---------- No further useful info, revert to generic rebuild ------------
 rebuildCall env (ArgInfo { ai_fun = fun, ai_args = rev_args }) cont
