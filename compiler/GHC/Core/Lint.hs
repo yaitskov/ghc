@@ -870,7 +870,9 @@ lintCoreExpr e@(Let (Rec pairs) body)
 lintCoreExpr e@(App _ _)
   | Var fun <- fun
   , fun `hasKey` runRWKey
-  , [arg_ty1, arg_ty2, arg3] <- args
+    -- N.B. we may have an over-saturated application of the form:
+    --   runRW (\s -> \x -> ...) y
+  , arg_ty1 : arg_ty2 : arg3 : rest <- args
   = do { fun_ty1 <- lintCoreArg (idType fun) arg_ty1
        ; fun_ty2 <- lintCoreArg fun_ty1      arg_ty2
          -- The simplifier pushes casts out of the continuation lambda;
@@ -882,7 +884,8 @@ lintCoreExpr e@(App _ _)
                         expr_ty <- lintJoinLams 1 (Just fun) expr
                         lintCastExpr expr expr_ty co
                       _ -> lintJoinLams 1 (Just fun) arg3
-       ; lintValApp arg3 fun_ty2 arg3_ty }
+       ; app_ty <- lintValApp arg3 fun_ty2 arg3_ty
+       ; lintCoreArgs app_ty rest }
 
   | Var fun <- fun
   , fun `hasKey` runRWKey
