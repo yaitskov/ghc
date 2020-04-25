@@ -11,6 +11,8 @@
 
   * Add `singleton` function for `Data.List.NonEmpty`.
 
+  * The planned deprecation of `Data.Monoid.First` and `Data.Monoid.Last`
+    is scrapped due to difficulties with the suggested migration path.
 
 ## 4.14.0.0 *TBA*
   * Bundled with GHC 8.10.1
