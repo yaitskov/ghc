@@ -2034,7 +2034,7 @@ runTcInteractive hsc_env thing_inside
                 -- Putting the dfuns in the type_env
                 -- is just to keep Core Lint happy
 
-    con_fields = [ (dataConName c, dataConFieldLabels c)
+    con_fields = [ (dataConName c, dataConFieldLabelsWithUpdates c)
                  | ATyCon t <- top_ty_things
                  , c <- tyConDataCons t ]
 

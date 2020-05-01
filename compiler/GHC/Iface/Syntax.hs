@@ -258,7 +258,7 @@ data IfaceConDecl
         ifConEqSpec  :: IfaceEqSpec,        -- Equality constraints
         ifConCtxt    :: IfaceContext,       -- Non-stupid context
         ifConArgTys  :: [IfaceType],        -- Arg types
-        ifConFields  :: [FieldLabel],  -- ...ditto... (field labels)
+        ifConFields  :: [FieldLabelWithUpdate], -- ...ditto... (field labels)
         ifConStricts :: [IfaceBang],
           -- Empty (meaning all lazy),
           -- or 1-1 corresp with arg tys
@@ -1171,7 +1171,7 @@ pprIfaceConDecl ss gadt_style tycon tc_binders parent
     pp_field_args = braces $ sep $ punctuate comma $ ppr_trim $
                     zipWith maybe_show_label fields tys_w_strs
 
-    maybe_show_label :: FieldLabel -> (IfaceBang, IfaceType) -> Maybe SDoc
+    maybe_show_label :: FieldLabelWithUpdate -> (IfaceBang, IfaceType) -> Maybe SDoc
     maybe_show_label lbl bty
       | showSub ss sel = Just (pprPrefixIfDeclBndr how_much occ
                                 <+> dcolon <+> pprFieldArgTy bty)
@@ -1542,7 +1542,7 @@ freeNamesIfConDecl (IfCon { ifConExTCvs  = ex_tvs, ifConCtxt = ctxt
   = fnList freeNamesIfBndr ex_tvs &&&
     freeNamesIfContext ctxt &&&
     fnList freeNamesIfType arg_tys &&&
-    mkNameSet (map flSelector flds) &&&
+    mkNameSet (concatMap (\fl -> [flSelector fl, flUpdate fl]) flds) &&&
     fnList freeNamesIfType (map snd eq_spec) &&& -- equality constraints
     fnList freeNamesIfBang bangs
 

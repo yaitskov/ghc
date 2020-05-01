@@ -2169,13 +2169,13 @@ extendPatSynEnv val_decls local_fix_env thing = do {
          final_gbl_env = gbl_env { tcg_field_env = field_env' }
    ; setEnvs (final_gbl_env, lcl_env) (thing pat_syn_bndrs) }
   where
-    new_ps :: HsValBinds GhcPs -> TcM [(Name, [FieldLabel])]
+    new_ps :: HsValBinds GhcPs -> TcM [(Name, [FieldLabelWithUpdate])]
     new_ps (ValBinds _ binds _) = foldrM new_ps' [] binds
     new_ps _ = panic "new_ps"
 
     new_ps' :: LHsBindLR GhcPs GhcPs
-            -> [(Name, [FieldLabel])]
-            -> TcM [(Name, [FieldLabel])]
+            -> [(Name, [FieldLabelWithUpdate])]
+            -> TcM [(Name, [FieldLabelWithUpdate])]
     new_ps' bind names
       | (L bind_loc (PatSynBind _ (PSB { psb_id = L _ n
                                        , psb_args = RecCon as }))) <- bind

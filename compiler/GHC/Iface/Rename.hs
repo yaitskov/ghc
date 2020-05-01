@@ -252,9 +252,15 @@ rnAvailInfo (AvailTC n ns fs) = do
                          return (AvailTC n' ns' fs')
 
 rnFieldLabel :: Rename FieldLabel
-rnFieldLabel (FieldLabel l b sel) = do
+rnFieldLabel (FieldLabel l b () sel) = do
     sel' <- rnIfaceGlobal sel
-    return (FieldLabel l b sel')
+    return (FieldLabel l b () sel')
+
+rnFieldLabelWithUpdate :: Rename FieldLabelWithUpdate
+rnFieldLabelWithUpdate (FieldLabel l b upd sel) = do
+    upd' <- rnIfaceGlobal upd
+    sel' <- rnIfaceGlobal sel
+    return (FieldLabel l b upd' sel')
 
 
 
@@ -558,7 +564,7 @@ rnIfaceConDecl d = do
     con_eq_spec <- mapM rnIfConEqSpec (ifConEqSpec d)
     con_ctxt <- mapM rnIfaceType (ifConCtxt d)
     con_arg_tys <- mapM rnIfaceType (ifConArgTys d)
-    con_fields <- mapM rnFieldLabel (ifConFields d)
+    con_fields <- mapM rnFieldLabelWithUpdate (ifConFields d)
     let rnIfaceBang (IfUnpackCo co) = IfUnpackCo <$> rnIfaceCo co
         rnIfaceBang bang = pure bang
     con_stricts <- mapM rnIfaceBang (ifConStricts d)

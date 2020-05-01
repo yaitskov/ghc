@@ -4,7 +4,7 @@ import GHC.Prelude
 import GHC.Types.Var( TyVar, TyCoVar, TyVarBinder )
 import GHC.Types.Name( Name, NamedThing )
 import {-# SOURCE #-} GHC.Core.TyCon( TyCon )
-import GHC.Types.FieldLabel ( FieldLabel )
+import GHC.Types.FieldLabel ( FieldLabel, FieldLabelWithUpdate )
 import GHC.Types.Unique ( Uniquable )
 import GHC.Utils.Outputable ( Outputable, OutputableBndr )
 import GHC.Types.Basic (Arity)
@@ -21,6 +21,7 @@ dataConUserTyVars :: DataCon -> [TyVar]
 dataConUserTyVarBinders :: DataCon -> [TyVarBinder]
 dataConSourceArity  :: DataCon -> Arity
 dataConFieldLabels :: DataCon -> [FieldLabel]
+dataConFieldLabelsWithUpdates :: DataCon -> [FieldLabelWithUpdate]
 dataConInstOrigArgTys  :: DataCon -> [Type] -> [Type]
 dataConStupidTheta :: DataCon -> ThetaType
 dataConFullSig :: DataCon

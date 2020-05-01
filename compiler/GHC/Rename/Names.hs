@@ -727,7 +727,7 @@ getLocalNonValBinders fixity_env
                             ; return (avail nm) }
 
     new_tc :: Bool -> LTyClDecl GhcPs
-           -> RnM (AvailInfo, [(Name, [FieldLabel])])
+           -> RnM (AvailInfo, [(Name, [FieldLabelWithUpdate])])
     new_tc overload_ok tc_decl -- NOT for type/data instances
         = do { let (bndrs, flds) = hsLTyClDeclBinders tc_decl
              ; names@(main_name : sub_names) <- mapM newTopSrcBinder bndrs
@@ -735,14 +735,14 @@ getLocalNonValBinders fixity_env
              ; let fld_env = case unLoc tc_decl of
                      DataDecl { tcdDataDefn = d } -> mk_fld_env d names flds'
                      _                            -> []
-             ; return (AvailTC main_name names flds', fld_env) }
+             ; return (AvailTC main_name names (fieldLabelsWithoutUpdates flds'), fld_env) }
 
 
     -- Calculate the mapping from constructor names to fields, which
     -- will go in tcg_field_env. It's convenient to do this here where
     -- we are working with a single datatype definition.
-    mk_fld_env :: HsDataDefn GhcPs -> [Name] -> [FieldLabel]
-               -> [(Name, [FieldLabel])]
+    mk_fld_env :: HsDataDefn GhcPs -> [Name] -> [FieldLabelWithUpdate]
+               -> [(Name, [FieldLabelWithUpdate])]
     mk_fld_env d names flds = concatMap find_con_flds (dd_cons d)
       where
         find_con_flds (L _ (ConDeclH98 { con_name = L _ rdr
@@ -769,7 +769,7 @@ getLocalNonValBinders fixity_env
           where lbl = occNameFS (rdrNameOcc rdr)
 
     new_assoc :: Bool -> LInstDecl GhcPs
-              -> RnM ([AvailInfo], [(Name, [FieldLabel])])
+              -> RnM ([AvailInfo], [(Name, [FieldLabelWithUpdate])])
     new_assoc _ (L _ (TyFamInstD {})) = return ([], [])
       -- type instances don't bind new names
 
@@ -804,27 +804,30 @@ getLocalNonValBinders fixity_env
                pure (avails, concat fldss)
 
     new_di :: Bool -> Maybe Name -> DataFamInstDecl GhcPs
-                   -> RnM (AvailInfo, [(Name, [FieldLabel])])
+                   -> RnM (AvailInfo, [(Name, [FieldLabelWithUpdate])])
     new_di overload_ok mb_cls dfid@(DataFamInstDecl { dfid_eqn =
                                      HsIB { hsib_body = ti_decl }})
         = do { main_name <- lookupFamInstName mb_cls (feqn_tycon ti_decl)
              ; let (bndrs, flds) = hsDataFamInstBinders dfid
              ; sub_names <- mapM newTopSrcBinder bndrs
              ; flds' <- mapM (newRecordSelector overload_ok sub_names) flds
-             ; let avail    = AvailTC (unLoc main_name) sub_names flds'
+             ; let avail    = AvailTC (unLoc main_name)
+                                      sub_names
+                                      (fieldLabelsWithoutUpdates flds')
                                   -- main_name is not bound here!
                    fld_env  = mk_fld_env (feqn_rhs ti_decl) sub_names flds'
              ; return (avail, fld_env) }
 
     new_loc_di :: Bool -> Maybe Name -> LDataFamInstDecl GhcPs
-                   -> RnM (AvailInfo, [(Name, [FieldLabel])])
+                   -> RnM (AvailInfo, [(Name, [FieldLabelWithUpdate])])
     new_loc_di overload_ok mb_cls (L _ d) = new_di overload_ok mb_cls d
 
-newRecordSelector :: Bool -> [Name] -> LFieldOcc GhcPs -> RnM FieldLabel
+newRecordSelector :: Bool -> [Name] -> LFieldOcc GhcPs -> RnM FieldLabelWithUpdate
 newRecordSelector _ [] _ = error "newRecordSelector: datatype has no constructors!"
 newRecordSelector overload_ok (dc:_) (L loc (FieldOcc _ (L _ fld)))
   = do { selName <- newTopSrcBinder $ L loc $ field
-       ; return $ qualFieldLbl { flSelector = selName } }
+       ; updName <- newTopSrcBinder $ L loc $ upd_rdr
+       ; return $ qualFieldLbl { flUpdate = updName, flSelector = selName } }
   where
     fieldOccName = occNameFS $ rdrNameOcc fld
     qualFieldLbl = mkFieldLabelOccs fieldOccName (nameOccName dc) overload_ok
@@ -836,6 +839,7 @@ newRecordSelector overload_ok (dc:_) (L loc (FieldOcc _ (L _ fld)))
               -- Template Haskell] in Convert.hs and Note [Looking up
               -- Exact RdrNames] in GHC.Rename.Env.
           | otherwise   = mkRdrUnqual (flSelector qualFieldLbl)
+    upd_rdr = mkRdrUnqual (flUpdate qualFieldLbl)
 
 {-
 Note [Looking up family names in family instances]

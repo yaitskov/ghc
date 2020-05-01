@@ -230,7 +230,7 @@ data IE pass
                 (LIEWrappedName (IdP pass))
                 IEWildcard
                 [LIEWrappedName (IdP pass)]
-                [Located (FieldLbl (IdP pass))]
+                [Located (FieldLbl () (IdP pass))]
         -- ^ Imported or exported Thing With given imported or exported
         --
         -- The thing is a Class/Type and the imported or exported things are

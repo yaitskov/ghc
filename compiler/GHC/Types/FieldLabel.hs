@@ -67,7 +67,10 @@ module GHC.Types.FieldLabel
    , FieldLabelEnv
    , FieldLbl(..)
    , FieldLabel
+   , FieldLabelWithUpdate
    , mkFieldLabelOccs
+   , fieldLabelWithoutUpdate
+   , fieldLabelsWithoutUpdates
    )
 where
 
@@ -88,45 +91,60 @@ import Data.Data
 type FieldLabelString = FastString
 
 -- | A map from labels to all the auxiliary information
-type FieldLabelEnv = DFastStringEnv FieldLabel
+type FieldLabelEnv = DFastStringEnv FieldLabelWithUpdate
 
 
-type FieldLabel = FieldLbl Name
+type FieldLabel = FieldLbl () Name
 
 -- | Fields in an algebraic record type
-data FieldLbl a = FieldLabel {
+data FieldLbl update_rep selector_rep = FieldLabel {
       flLabel        :: FieldLabelString, -- ^ User-visible label of the field
       flIsOverloaded :: Bool,             -- ^ Was DuplicateRecordFields on
                                           --   in the defining module for this datatype?
-      flSelector     :: a                 -- ^ Record selector function
+      flUpdate       :: update_rep,       -- ^ Field update function
+      flSelector     :: selector_rep      -- ^ Record selector function
     }
   deriving (Eq, Functor, Foldable, Traversable)
-deriving instance Data a => Data (FieldLbl a)
+deriving instance (Data a, Data b) => Data (FieldLbl a b)
 
-instance Outputable a => Outputable (FieldLbl a) where
+instance Outputable b => Outputable (FieldLbl a b) where
     ppr fl = ppr (flLabel fl) <> braces (ppr (flSelector fl))
 
-instance Binary a => Binary (FieldLbl a) where
-    put_ bh (FieldLabel aa ab ac) = do
+instance (Binary a, Binary b) => Binary (FieldLbl a b) where
+    put_ bh (FieldLabel aa ab ac ad) = do
         put_ bh aa
         put_ bh ab
         put_ bh ac
+        put_ bh ad
     get bh = do
+        aa <- get bh
         ab <- get bh
         ac <- get bh
         ad <- get bh
-        return (FieldLabel ab ac ad)
+        return (FieldLabel aa ab ac ad)
+
+
+-- | Representation of a field where we know the names of both the selector
+-- function (first component) and updater function (second component)
+type FieldLabelWithUpdate = FieldLbl Name Name
+
+fieldLabelWithoutUpdate :: FieldLabelWithUpdate -> FieldLabel
+fieldLabelWithoutUpdate fl = fl { flUpdate = () }
+
+fieldLabelsWithoutUpdates :: [FieldLabelWithUpdate] -> [FieldLabel]
+fieldLabelsWithoutUpdates = map fieldLabelWithoutUpdate
 
 
 -- | Record selector OccNames are built from the underlying field name
 -- and the name of the first data constructor of the type, to support
 -- duplicate record field names.
 -- See Note [Why selector names include data constructors].
-mkFieldLabelOccs :: FieldLabelString -> OccName -> Bool -> FieldLbl OccName
+mkFieldLabelOccs :: FieldLabelString -> OccName -> Bool -> FieldLbl OccName OccName
 mkFieldLabelOccs lbl dc is_overloaded
   = FieldLabel { flLabel = lbl, flIsOverloaded = is_overloaded
-               , flSelector = sel_occ }
+               , flUpdate = upd_occ, flSelector = sel_occ }
   where
     str     = ":" ++ unpackFS lbl ++ ":" ++ occNameString dc
+    upd_occ = mkRecFldUpdOcc str
     sel_occ | is_overloaded = mkRecFldSelOcc str
             | otherwise     = mkVarOccFS lbl

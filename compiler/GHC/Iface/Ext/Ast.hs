@@ -1900,8 +1900,8 @@ instance ToHie (IEContext (LIEWrappedName Name)) where
         [ toHie $ C (IEThing c) n
         ]
 
-instance ToHie (IEContext (Located (FieldLbl Name))) where
+instance ToHie (IEContext (Located (FieldLbl () Name))) where
   toHie (IEC c (L span lbl)) = concatM $ makeNode lbl span : case lbl of
-      FieldLabel _ _ n ->
+      FieldLabel _ _ _ n ->
         [ toHie $ C (IEThing c) $ L span n
         ]

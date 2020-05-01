@@ -28,6 +28,7 @@ import GHC.Core.PatSyn
 import GHC.Types.Var
 import GHC.Types.Var.Set
 import GHC.Types.Basic
+import GHC.Types.FieldLabel
 import GHC.Types.Name
 import GHC.Types.Name.Env
 import GHC.Types.Id.Make
@@ -103,7 +104,7 @@ buildDataCon :: FamInstEnvs
             -> [HsSrcBang]
             -> Maybe [HsImplBang]
                 -- See Note [Bangs on imported data constructors] in GHC.Types.Id.Make
-           -> [FieldLabel]             -- Field labels
+           -> [FieldLabelWithUpdate]   -- Field labels
            -> [TyVar]                  -- Universals
            -> [TyCoVar]                -- Existentials
            -> [TyVarBinder]            -- User-written 'TyVarBinder's

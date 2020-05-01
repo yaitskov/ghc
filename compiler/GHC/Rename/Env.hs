@@ -25,7 +25,7 @@ module GHC.Rename.Env (
         lookupSigCtxtOccRn,
 
         lookupInstDeclBndr, lookupRecFieldOcc, lookupFamInstName,
-        lookupConstructorFields,
+        lookupConstructorFields, lookupDataConFieldsWithUpdates,
 
         lookupGreAvailRn,
 
@@ -55,6 +55,7 @@ import GHC.Tc.Utils.Env
 import GHC.Tc.Utils.Monad
 import GHC.Parser.PostProcess ( filterCTuple, setRdrNameSpace )
 import GHC.Builtin.Types
+import GHC.Types.FieldLabel
 import GHC.Types.Name
 import GHC.Types.Name.Set
 import GHC.Types.Name.Env
@@ -421,11 +422,26 @@ lookupConstructorFields con_name
         ; if nameIsLocalOrFrom this_mod con_name then
           do { field_env <- getRecFieldEnv
              ; traceTc "lookupCF" (ppr con_name $$ ppr (lookupNameEnv field_env con_name) $$ ppr field_env)
-             ; return (lookupNameEnv field_env con_name `orElse` []) }
+             ; return (fieldLabelsWithoutUpdates
+                          (lookupNameEnv field_env con_name `orElse` [])) }
           else
           do { con <- tcLookupConLike con_name
              ; traceTc "lookupCF 2" (ppr con)
              ; return (conLikeFieldLabels con) } }
+
+-- | Look up the fields of a given *data* constructor, like
+-- 'lookupConstructorFields', but include the names of the update functions.
+lookupDataConFieldsWithUpdates :: Name -> RnM [FieldLabelWithUpdate]
+lookupDataConFieldsWithUpdates con_name
+  = do  { this_mod <- getModule
+        ; if nameIsLocalOrFrom this_mod con_name then
+          do { field_env <- getRecFieldEnv
+             ; traceTc "lookupCF" (ppr con_name $$ ppr (lookupNameEnv field_env con_name) $$ ppr field_env)
+             ; return (lookupNameEnv field_env con_name `orElse` []) }
+          else
+          do { con <- tcLookupDataCon con_name
+             ; traceTc "lookupCF 2" (ppr con)
+             ; return (dataConFieldLabelsWithUpdates con) } }
 
 
 -- In CPS style as `RnM r` is monadic
@@ -602,8 +618,8 @@ lookupSubBndrOcc_helper must_have_parent warn_if_deprec parent rdr_name
           case mfs of
             Nothing ->
               let fs = occNameFS (nameOccName name)
-              in FieldLabel fs False name
-            Just fs -> FieldLabel fs True name
+              in FieldLabel fs False () name
+            Just fs -> FieldLabel fs True () name
 
         -- Called when we find no matching GREs after disambiguation but
         -- there are three situations where this happens.

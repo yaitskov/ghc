@@ -37,7 +37,8 @@ module GHC.Core.DataCon (
         dataConStupidTheta,
         dataConInstArgTys, dataConOrigArgTys, dataConOrigResTy,
         dataConInstOrigArgTys, dataConRepArgTys,
-        dataConFieldLabels, dataConFieldType, dataConFieldType_maybe,
+        dataConFieldLabels, dataConFieldLabelsWithUpdates,
+        dataConFieldType, dataConFieldType_maybe,
         dataConSrcBangs,
         dataConSourceArity, dataConRepArity,
         dataConIsInfix,
@@ -429,7 +430,7 @@ data DataCon
                 -- Matches 1-1 with dcOrigArgTys
                 -- Hence length = dataConSourceArity dataCon
 
-        dcFields  :: [FieldLabel],
+        dcFields  :: [FieldLabelWithUpdate],
                 -- Field labels for this constructor, in the
                 -- same order as the dcOrigArgTys;
                 -- length = 0 (if not a record) or dataConSourceArity.
@@ -935,8 +936,8 @@ mkDataCon :: Name
           -> Bool           -- ^ Is the constructor declared infix?
           -> TyConRepName   -- ^  TyConRepName for the promoted TyCon
           -> [HsSrcBang]    -- ^ Strictness/unpack annotations, from user
-          -> [FieldLabel]   -- ^ Field labels for the constructor,
-                            -- if it is a record, otherwise empty
+          -> [FieldLabelWithUpdate] -- ^ Field labels for the constructor,
+                                    -- if it is a record, otherwise empty
           -> [TyVar]        -- ^ Universals.
           -> [TyCoVar]      -- ^ Existentials.
           -> [TyVarBinder]  -- ^ User-written 'TyVarBinder's.
@@ -1193,7 +1194,12 @@ dataConImplicitTyThings (MkData { dcWorkId = work, dcRep = rep })
 
 -- | The labels for the fields of this particular 'DataCon'
 dataConFieldLabels :: DataCon -> [FieldLabel]
-dataConFieldLabels = dcFields
+dataConFieldLabels = fieldLabelsWithoutUpdates . dcFields
+
+-- | The labels for the fields of this particular 'DataCon',
+-- including the updater functions for each
+dataConFieldLabelsWithUpdates :: DataCon -> [FieldLabelWithUpdate]
+dataConFieldLabelsWithUpdates = dcFields
 
 -- | Extract the type for any given labelled field of the 'DataCon'
 dataConFieldType :: DataCon -> FieldLabelString -> Type
@@ -1206,7 +1212,7 @@ dataConFieldType con label = case dataConFieldType_maybe con label of
 dataConFieldType_maybe :: DataCon -> FieldLabelString
                        -> Maybe (FieldLabel, Type)
 dataConFieldType_maybe con label
-  = find ((== label) . flLabel . fst) (dcFields con `zip` dcOrigArgTys con)
+  = find ((== label) . flLabel . fst) (dataConFieldLabels con `zip` dcOrigArgTys con)
 
 -- | Strictness/unpack annotations, from user; or, for imported
 -- DataCons, from the interface file
