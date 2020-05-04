@@ -34,6 +34,7 @@ import GHC.Types.Id
 import GHC.Core.Type
 import GHC.Core.Make ( mkStringExprFS, mkNaturalExpr )
 
+import GHC.Types.FieldLabel
 import GHC.Types.Name   ( Name, pprDefinedAt )
 import GHC.Types.Var.Env ( VarEnv )
 import GHC.Core.DataCon
@@ -609,44 +610,44 @@ Suppose we have
 
     data T y = MkT { foo :: [y] }
 
-and `foo` is in scope.  Then GHC will automatically solve a constraint like
+and `foo` is in scope.  The HasField class is defined (in GHC.Records) thus:
+
+    class HasField x r a | x r -> a where
+      hasField :: r -> (a -> r, a)
+
+We want GHC to automatically solve a constraint like
 
     HasField "foo" (T Int) b
 
 by emitting a new wanted
 
-    T alpha -> [alpha] ~# T Int -> b
+    (T alpha -> ([alpha] -> T alpha, [alpha])) ~# (T Int -> (b -> T Int, b))
 
-and building a HasField dictionary out of the selector function `foo`,
-appropriately cast.
+and building a HasField dictionary out of the updater function `$upd:foo:MKT`.
+See Note [Record updaters] in GHC.Tc.TyCl.Utils for how updaters are built.
 
-The HasField class is defined (in GHC.Records) thus:
-
-    class HasField (x :: k) r a | x r -> a where
-      getField :: r -> a
-
-Since this is a one-method class, it is represented as a newtype.
+Since HasField is a one-method class, it is represented as a newtype.
 Hence we can solve `HasField "foo" (T Int) b` by taking an expression
-of type `T Int -> b` and casting it using the newtype coercion.
+of type `T Int -> (b -> T Int, b)` and casting it using the newtype coercion.
 Note that
 
-    foo :: forall y . T y -> [y]
+    $upd:foo:MKT :: forall y . T y -> ([y] -> T y, [y])
 
 so the expression we construct is
 
-    foo @alpha |> co
+    $upd:foo:MKT @alpha |> co
 
 where
 
-    co :: (T alpha -> [alpha]) ~# HasField "foo" (T Int) b
+    co :: (T alpha -> ([alpha] -> T alpha, [alpha])) ~# HasField "foo" (T Int) b
 
 is built from
 
-    co1 :: (T alpha -> [alpha]) ~# (T Int -> b)
+    co1 :: (T alpha -> ([alpha] -> T alpha, [alpha])) ~# (T Int -> (b -> T Int, b))
 
 which is the new wanted, and
 
-    co2 :: (T Int -> b) ~# HasField "foo" (T Int) b
+    co2 :: (T Int -> (b -> T Int, b)) ~# HasField "foo" (T Int) b
 
 which can be derived from the newtype coercion.
 
@@ -675,22 +676,22 @@ matchHasField dflags short_cut clas tys
                -- x should be a field of r
              , Just fl <- lookupTyConFieldLabel x r_tc
                -- the field selector should be in scope
-             , Just gre <- lookupGRE_FieldLabel rdr_env fl
+             , Just gre <- lookupGRE_FieldLabel rdr_env (fieldLabelWithoutUpdate fl)
 
-             -> do { sel_id <- tcLookupId (flSelector fl)
-                   ; (tv_prs, preds, sel_ty) <- tcInstType newMetaTyVars sel_id
+             -> do { upd_id <- tcLookupId (flUpdate fl)
+                   ; (tv_prs, preds, upd_ty) <- tcInstType newMetaTyVars upd_id
 
                          -- The first new wanted constraint equates the actual
-                         -- type of the selector with the type (r -> a) within
-                         -- the HasField x r a dictionary.  The preds will
-                         -- typically be empty, but if the datatype has a
+                         -- type of the updater with the type (r -> (a -> r, a))
+                         -- within the HasField x r a dictionary.  The preds
+                         -- will typically be empty, but if the datatype has a
                          -- "stupid theta" then we have to include it here.
-                   ; let theta = mkPrimEqPred sel_ty (mkVisFunTy r_ty a_ty) : preds
+                   ; let theta = mkPrimEqPred upd_ty (mkVisFunTy r_ty (mkBoxedTupleTy [mkVisFunTy a_ty r_ty, a_ty])) : preds
 
-                         -- Use the equality proof to cast the selector Id to
-                         -- type (r -> a), then use the newtype coercion to cast
-                         -- it to a HasField dictionary.
-                         mk_ev (ev1:evs) = evSelector sel_id tvs evs `evCast` co
+                         -- Use the equality proof to cast the updater Id to
+                         -- type (r -> (a -> r, a)), then use the newtype
+                         -- coercion to cast it to a HasField dictionary.
+                         mk_ev (ev1:evs) = evSelector upd_id tvs evs `evCast` co
                            where
                              co = mkTcSubCo (evTermCoercion (EvExpr ev1))
                                       `mkTcTransCo` mkTcSymCo co2
@@ -701,10 +702,10 @@ matchHasField dflags short_cut clas tys
 
                          tvs = mkTyVarTys (map snd tv_prs)
 
-                     -- The selector must not be "naughty" (i.e. the field
-                     -- cannot have an existentially quantified type), and
-                     -- it must not be higher-rank.
-                   ; if not (isNaughtyRecordSelector sel_id) && isTauTy sel_ty
+                     -- Do not generate an instance if the updater cannot be
+                     -- defined for the field and hence is ().  (See Note
+                     -- [Missing record updaters] in GHC.Tc.TyCl.Utils.)
+                   ; if not (upd_ty `eqType` unitTy)
                      then do { addUsedGRE True gre
                              ; return OneInst { cir_new_theta = theta
                                               , cir_mk_ev     = mk_ev

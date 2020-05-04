@@ -1563,10 +1563,8 @@ tyConFieldLabelEnv tc
   | otherwise     = emptyDFsEnv
 
 -- | Look up a field label belonging to this 'TyCon'
-lookupTyConFieldLabel :: FieldLabelString -> TyCon -> Maybe FieldLabel
-lookupTyConFieldLabel lbl tc =
-    fmap fieldLabelWithoutUpdate $
-        lookupDFsEnv (tyConFieldLabelEnv tc) lbl
+lookupTyConFieldLabel :: FieldLabelString -> TyCon -> Maybe FieldLabelWithUpdate
+lookupTyConFieldLabel lbl tc = lookupDFsEnv (tyConFieldLabelEnv tc) lbl
 
 -- | Make a map from strings to FieldLabels from all the data
 -- constructors of this algebraic tycon

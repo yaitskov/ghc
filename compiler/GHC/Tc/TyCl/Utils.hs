@@ -38,7 +38,7 @@ import GHC.Tc.Gen.Bind( tcValBinds )
 import GHC.Core.TyCo.Rep( Type(..), Coercion(..), MCoercion(..), UnivCoProvenance(..) )
 import GHC.Tc.Utils.TcType
 import GHC.Core.Predicate
-import GHC.Builtin.Types( unitTy )
+import GHC.Builtin.Types( unitTy, mkBoxedTupleTy )
 import GHC.Core.Make( rEC_SEL_ERROR_ID )
 import GHC.Hs
 import GHC.Core.Class
@@ -47,6 +47,7 @@ import GHC.Driver.Types
 import GHC.Core.TyCon
 import GHC.Core.ConLike
 import GHC.Core.DataCon
+import GHC.Types.FieldLabel
 import GHC.Types.Name
 import GHC.Types.Name.Env
 import GHC.Types.Name.Set hiding (unitFV)
@@ -760,7 +761,8 @@ addTyConsToGblEnv tyclss
     do { traceTc "tcAddTyCons" $ vcat
             [ text "tycons" <+> ppr tyclss
             , text "implicits" <+> ppr implicit_things ]
-       ; gbl_env <- tcRecSelBinds (mkRecSelBinds tyclss)
+       ; gbl_env <- tcRemoveDataFamConPlaceholders tyclss $
+                        tcRecSelBinds =<< mkRecSelBinds tyclss
        ; return gbl_env }
  where
    implicit_things = concatMap implicitTyConThings tyclss
@@ -840,13 +842,20 @@ tcRecSelBinds sel_bind_prs
                                              , let loc = getSrcSpan sel_id ]
     binds = [(NonRecursive, unitBag bind) | (_, bind) <- sel_bind_prs]
 
-mkRecSelBinds :: [TyCon] -> [(Id, LHsBind GhcRn)]
+mkRecSelBinds :: [TyCon] -> TcM [(Id, LHsBind GhcRn)]
 -- NB We produce *un-typechecked* bindings, rather like 'deriving'
 --    This makes life easier, because the later type checking will add
 --    all necessary type abstractions and applications
 mkRecSelBinds tycons
-  = map mkRecSelBind [ (tc,fld) | tc <- tycons
-                                , fld <- tyConFieldLabels tc ]
+  = concatMapM mkRecSelAndUpd [ (tc,fld)
+                              | tc <- tycons
+                              , fld <- tyConFieldLabelsWithUpdates tc ]
+
+mkRecSelAndUpd :: (TyCon, FieldLabelWithUpdate) -> TcM [(Id, LHsBind GhcRn)]
+mkRecSelAndUpd (tc, fl)
+  = do { upd <- mkRecUpdBind tc fl
+       ; return [ mkRecSelBind (tc,fieldLabelWithoutUpdate fl), upd]
+       }
 
 mkRecSelBind :: (TyCon, FieldLabel) -> (Id, LHsBind GhcRn)
 mkRecSelBind (tycon, fl)
@@ -1095,4 +1104,249 @@ Although ImpredicativeTypes is somewhat fragile and unpredictable in GHC right
 now, it will become robust when Quick Look impredicativity is implemented. In
 the meantime, using ImpredicativeTypes to instantiate the `a` type variable in
 recSelError's type does actually work, so its use here is benign.
+-}
+
+
+{-
+************************************************************************
+*                                                                      *
+                Building record updaters
+*                                                                      *
+************************************************************************
+-}
+
+-- | Create a record updater binding for a field in a TyCon.
+-- See Note [Record updaters]
+mkRecUpdBind :: TyCon -> FieldLabelWithUpdate -> TcM (Id, LHsBind GhcRn)
+mkRecUpdBind tycon fl = do
+    -- Make fresh names x1..xN for binding all the fields in the TyCon
+    -- (including the one being updated), and a fresh name y for binding the new
+    -- value of the field being updated.
+    x_vars <- fmap mkNameEnv $ forM (tyConFieldLabels tycon) $ \fl' ->
+                  (,) (flSelector fl') <$> newSysName (mkVarOccFS (flLabel fl'))
+    y_var <- newSysName (mkVarOccFS (flLabel fl))
+    return $ mkRecUpdBind' tycon fl x_vars y_var
+
+mkRecUpdBind' :: TyCon -> FieldLabelWithUpdate -> NameEnv Name -> Name -> (Id, LHsBind GhcRn)
+mkRecUpdBind' tycon fl x_vars y_var =
+    (upd_id, L loc upd_bind)
+  where
+    loc      = getSrcSpan sel_name
+    lbl      = flLabel fl
+    sel_name = flSelector fl
+    upd_name = flUpdate fl
+
+    upd_id = mkExportedLocalId VanillaId upd_name upd_ty
+
+    -- Find a representative constructor, con1
+    all_cons = tyConDataCons tycon
+    cons_w_field = filter has_field all_cons
+    has_field dc = any ((== lbl) . flLabel) (dataConFieldLabels dc)
+    con1 = ASSERT( not (null cons_w_field) ) head cons_w_field
+
+    field_ty   = dataConFieldType con1 lbl
+    data_tvbs  = filter (\tvb -> binderVar tvb `elemVarSet` data_tv_set) $
+                 dataConUserTyVarBinders con1
+    data_tv_set= tyCoVarsOfTypes inst_tys
+
+    -- See Note [Missing record updaters]
+    is_naughty = not (tyCoVarsOfType field_ty `subVarSet` data_tv_set)
+                  || not (isTauTy field_ty)
+                  || not (isLiftedTypeKind (typeKind field_ty))
+
+    -- Update type, which will (normally) be
+    --     forall ... . (...) => data_ty -> (field_ty -> data_ty, field_ty)
+    -- where the forall-bound type variables and context are the same as
+    -- the selector type (see Note [Polymorphic selectors]).
+    upd_ty | is_naughty = unitTy
+           | otherwise  = mkForAllTys data_tvbs             $
+                          mkPhiTy (dataConStupidTheta con1) $   -- Urgh!
+                          mkVisFunTy data_ty                $
+                          mkBoxedTupleTy [ mkVisFunTy field_ty data_ty
+                                         , field_ty
+                                         ]
+
+    -- Make the binding:
+    --   upd (C2 { fld1 = x1, .., fldN = xN })
+    --       = (\ y -> C2 { fld1 = y, fld2 = x2, .., fldN = xN }, x1)
+    --   upd (C7 { fld1 = x1, .., fldM = xM })
+    --       = (\ y -> C7 { fld1 = y, fld3 = x3, .., fldM = xM }, x1)
+    --    where cons_w_field = [C2,C7] and fld1 is being selected/updated
+    upd_bind = mkTopFunBind Generated upd_lname alts
+      where
+        alts | is_naughty = [mkSimpleMatch (mkPrefixFunRhs upd_lname)
+                                           [] unit_rhs]
+             | otherwise =  map mk_match cons_w_field ++ deflt
+
+    mk_match con = mkSimpleMatch (mkPrefixFunRhs upd_lname)
+                                 [mk_pat con]
+                                 (mk_expr con)
+    upd_lname = L loc upd_name
+
+    -- Pattern that matches C { fld1 = x1, .., fldN = xN }
+    mk_pat con = L loc (ConPat noExtField (L loc (getName con))
+                                          (RecCon (rec_fields con pat_var)))
+    pat_var = VarPat noExtField . L loc . x_var
+
+    -- RHS expression in updater binding: (\y -> C{...}, x1)
+    mk_expr con = mkLHsTupleExpr
+                      [ mk_update_fun con
+                      , L loc (HsVar noExtField (L loc (x_var fl)))
+                      ]
+
+    -- Make the first component of the pair: a function that takes a new value
+    -- for the field being updated and constructs a record with that field
+    -- updated and the others unchanged: e.g. if updating fld1 we make
+    --     \y -> C { fld1 = y, fld2 = x2, .., fldN = xN }
+    mk_update_fun con = mkHsLam
+        [L loc (VarPat noExtField (L loc y_var))]
+            (L loc (RecordCon noExtField
+                       (L loc (getName con))
+                       (rec_fields con con_var)))
+    con_var fl' = HsVar noExtField (L loc (if flSelector fl' == sel_name
+                                           then y_var
+                                           else x_var fl'))
+
+    -- Used for both pattern and record construction, to create
+    --     { fld1 = k fld1, .., fldN = k fldN }
+    -- where k gives the hsRecFieldArg for each field
+    rec_fields :: DataCon -> (FieldLabel -> a) -> HsRecFields GhcRn (Located a)
+    rec_fields con k = HsRecFields { rec_flds = map rec_field
+                                                    (dataConFieldLabels con)
+                                   , rec_dotdot = Nothing }
+      where
+        rec_field fl' = L loc (HsRecField
+                                  { hsRecFieldLbl = L loc (field_occ fl')
+                                  , hsRecFieldArg = L loc (k fl')
+                                  , hsRecPun = False })
+        field_occ fl' = FieldOcc (flSelector fl')
+                                 (L loc (mkVarUnqual (flLabel fl')))
+
+    -- The x_vars NameEnv contains a fresh name for every selector name in the
+    -- TyCon, i.e. maps fldN to xN.
+    x_var :: FieldLbl upd Name -> Name
+    x_var fl' = lookupNameEnv_NF x_vars (flSelector fl')
+
+    -- Add catch-all default case unless the case is exhaustive
+    -- We do this explicitly so that we get a nice error message that
+    -- mentions this particular record selector
+    deflt | all dealt_with all_cons = []
+          | otherwise = [mkSimpleMatch CaseAlt
+                            [L loc (WildPat noExtField)]
+                            (mkHsApp (L loc (HsVar noExtField
+                                         (L loc (getName rEC_SEL_ERROR_ID))))
+                                     (L loc (HsLit noExtField msg_lit)))]
+
+        -- Do not add a default case unless there are unmatched
+        -- constructors.  We must take account of GADTs, else we
+        -- get overlap warning messages from the pattern-match checker
+        -- NB: we need to pass type args for the *representation* TyCon
+        --     to dataConCannotMatch, hence the calculation of inst_tys
+        --     This matters in data families
+        --              data instance T Int a where
+        --                 A :: { fld :: Int } -> T Int Bool
+        --                 B :: { fld :: Int } -> T Int Char
+    dealt_with dc =
+      dc `elem` cons_w_field || dataConCannotMatch inst_tys dc
+
+    (univ_tvs, _, eq_spec, _, _, data_ty) = dataConFullSig con1
+
+    eq_subst = mkTvSubstPrs (map eqSpecPair eq_spec)
+    inst_tys = substTyVars eq_subst univ_tvs
+
+    unit_rhs = mkLHsTupleExpr []
+    msg_lit = HsStringPrim NoSourceText (bytesFS lbl)
+
+{-
+Note [Record updaters]
+~~~~~~~~~~~~~~~~~~~~~~
+Given a datatype declaration, we generate a record selector and also a "record
+updater" for each field.  For a record type `r` containing a field type `a`, the
+updater will have type
+
+    r -> (a -> r, a)
+
+where the first component of the pair sets the field and the second component
+returns the existing value.  For example, given the data declaration
+
+    data T y = MkT { foo :: [y], bar :: Int }
+
+we generate the record updaters:
+
+    $upd:foo:MkT :: T y -> ([y] -> T y, [y])
+    $upd:foo:MkT (MkT { foo = x1, bar = x2})
+        = (\y -> MkT { foo = y, bar = x2}, x1)
+
+    $upd:bar:MkT :: T y -> (Int -> T y, Int)
+    $upd:bar:MkT (MkT { foo = x1, bar = x2 })
+        = (\y -> MkT { foo = x1, bar = y}, x2)
+
+These are used to produce instances of GHC.Records.HasField automatically as
+described in Note [HasField instances] in GHC.Tc.Instance.Class.
+
+Note that:
+
+ * The updater's OccName is prefixed with $upd: so it is never valid in user
+   code. Its Name never appears in the AvailInfo or GlobalRdrEnv; instead an
+   updater is considered to be in scope iff the corresponding field label is in
+   scope.
+
+ * The Name of each updater is stored alongside that of the selector in the
+   'FieldLabelWithUpdate's in each 'DataCon'.
+
+ * A renamed-syntax binding for each updater is produced by mkRecUpdBind, just
+   as mkRecSelBind does for selectors; these bindings are then type-checked
+   together normally.  We produce renamed syntax rather than attempting to
+   generate Core terms directly because the corresponding Core terms are rather
+   complex (e.g. because of worker-wrapper).
+
+ * In some cases we may not be able to generate an updater and will bind its
+   name to () instead (see Note [Missing record updaters]).
+
+
+Note [Missing record updaters]
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+There are a few cases in which we cannot generate an updater for a field:
+
+ * The field has an existential tyvar, e.g.
+     data T = forall a . MkT { foo :: a }
+   This is the same as for selectors (see Note [Naughty record selectors]).
+
+ * The field is higher-rank, e.g.
+     data T = MkT { foo :: forall a . a -> a }
+   as this would require an impredicative instantiation of (,).
+
+ * The field kind is not Type, e.g.
+     data T = MkT { foo :: Addr# }
+   as this would require an ill-kinded application of (,).
+
+If any of these apply, we bind $upd:foo:MkT to (), just like for naughty
+record selectors. This means that when trying to generate a HasField instance,
+we need to check if the updater is () and if so give up.
+-}
+
+
+tcRemoveDataFamConPlaceholders :: [TyCon] -> TcM a -> TcM a
+-- ^ Remove the placeholders added by tcAddDataFamConPlaceholders
+-- See Note [tcRemoveDataFamConPlaceholders]
+tcRemoveDataFamConPlaceholders tycons = updLclEnv upd_env
+  where
+    upd_env env = env { tcl_env = delListFromNameEnv (tcl_env env) cons }
+
+    cons = [ dataConName data_con
+           | tycon <- tycons
+           , isFamInstTyCon tycon
+           , data_con <- tyConDataCons tycon
+           ]
+
+{-
+Note [tcRemoveDataFamConPlaceholders]
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+When type-checking record update bindings, we need to be able to look up the
+data constructors for the corresponding datatypes, because the constructors are
+used in the definitions.  However, for data constructors in data family
+instances the tcl_env contains placeholder bindings added to prevent the use of
+promotion (see Note [AFamDataCon: not promoting data family constructors] in
+GHC.Tc.Utils.Env).  Thus we must remove them again before the call to
+tcRecSelBinds in addTyConsToGblEnv.
 -}
