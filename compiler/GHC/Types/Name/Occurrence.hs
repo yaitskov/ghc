@@ -68,7 +68,7 @@ module GHC.Types.Name.Occurrence (
         mkSuperDictSelOcc, mkSuperDictAuxOcc,
         mkLocalOcc, mkMethodOcc, mkInstTyTcOcc,
         mkInstTyCoOcc, mkEqPredCoOcc,
-        mkRecFldSelOcc, mkRecFldUpdOcc,
+        mkRecFldSelOcc, mkRecFldUpdOcc, isRecFldUpdOcc,
         mkTyConRepOcc,
 
         -- ** Deconstruction
@@ -601,6 +601,12 @@ isTypeableBindOcc occ =
      '$':'t':'c':_ -> True  -- mkTyConRepOcc
      '$':'t':'r':_ -> True  -- Module binding
      _ -> False
+
+isRecFldUpdOcc :: OccName -> Bool
+isRecFldUpdOcc occ =
+    case occNameString occ of
+      '$':'u':'p':'d':':':_ -> True
+      _ -> False
 
 mkDataConWrapperOcc, mkWorkerOcc,
         mkMatcherOcc, mkBuilderOcc,

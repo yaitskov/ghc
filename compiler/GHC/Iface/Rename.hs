@@ -258,7 +258,9 @@ rnFieldLabel (FieldLabel l b () sel) = do
 
 rnFieldLabelWithUpdate :: Rename FieldLabelWithUpdate
 rnFieldLabelWithUpdate (FieldLabel l b upd sel) = do
-    upd' <- rnIfaceGlobal upd
+    -- The selector appears in the AvailInfo, so it gets renamed normally, but
+    -- the updater does not so it is a "never-exported TyThing".
+    upd' <- rnIfaceNeverExported upd
     sel' <- rnIfaceGlobal sel
     return (FieldLabel l b upd' sel')
 
@@ -434,16 +436,22 @@ rnIfaceFamInst d = do
 rnIfaceDecl' :: Rename (Fingerprint, IfaceDecl)
 rnIfaceDecl' (fp, decl) = (,) fp <$> rnIfaceDecl decl
 
+-- | Is this an 'IfaceId' for a "never-exported TyThing"?
+-- See Note [rnIfaceNeverExported] and, for Typeable bindings, see
+-- Note [Grand plan for Typeable].
+isNeverExportedIfaceId :: Name -> IfaceIdDetails -> Bool
+isNeverExportedIfaceId _ IfDFunId = True
+isNeverExportedIfaceId n _        = isDefaultMethodOcc occ
+                                 || isTypeableBindOcc  occ
+                                 || isRecFldUpdOcc     occ
+  where
+    occ = occName n
+
 rnIfaceDecl :: Rename IfaceDecl
 rnIfaceDecl d@IfaceId{} = do
-            name <- case ifIdDetails d of
-                      IfDFunId -> rnIfaceNeverExported (ifName d)
-                      _ | isDefaultMethodOcc (occName (ifName d))
-                        -> rnIfaceNeverExported (ifName d)
-                      -- Typeable bindings. See Note [Grand plan for Typeable].
-                      _ | isTypeableBindOcc (occName (ifName d))
-                        -> rnIfaceNeverExported (ifName d)
-                        | otherwise -> rnIfaceGlobal (ifName d)
+            name <- if isNeverExportedIfaceId (ifName d) (ifIdDetails d)
+                    then rnIfaceNeverExported (ifName d)
+                    else rnIfaceGlobal (ifName d)
             ty <- rnIfaceType (ifType d)
             details <- rnIfaceIdDetails (ifIdDetails d)
             info <- rnIfaceIdInfo (ifIdInfo d)
