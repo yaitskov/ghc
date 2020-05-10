@@ -354,7 +354,7 @@ upd_rem_set_push_gc(UpdRemSet *rs, MarkQueueEnt *ent)
         ACQUIRE_SPIN_LOCK(&gc_alloc_block_sync);
         nonmovingAddUpdRemSetBlocks(rs);
         bdescr *bd = allocGroup(MARK_QUEUE_BLOCKS);
-        bd->link = markQueueBlockBdescr(rs->block);
+        bd->link = NULL;
         rs->block = (MarkQueueBlock *) bd->start;
         rs->block->head = 0;
         RELEASE_SPIN_LOCK(&gc_alloc_block_sync);
@@ -411,7 +411,7 @@ static uint32_t markQueueLength(MarkQueue *q);
 static void init_mark_queue_(MarkQueue *queue);
 
 /* Transfers the given capability's update-remembered set to the global
- * remembered set.
+ * remembered set. Must hold SM lock/allocation spinlock.
  */
 void nonmovingAddUpdRemSetBlocks(UpdRemSet *rset)
 {
@@ -576,11 +576,13 @@ markQueuePushClosureGC (UpdRemSet *rset, StgClosure *p)
     upd_rem_set_push_gc(rset, &ent);
 }
 #define ALWAYS_INLINE __attribute__((always_inline))
+
 static inline
 void push_closure (struct MarkContext *mctx,
                    StgClosure *p,
-                   StgClosure **origin) ALWAYS_INLINE
+                   StgClosure **origin)
 {
+    if (!check_in_nonmoving_heap(p)) return;
 #if defined(DEBUG)
     ASSERT(!HEAP_ALLOCED_GC(p) || (Bdescr((StgPtr) p)->gen == oldest_gen));
     ASSERT(LOOKS_LIKE_CLOSURE_PTR(p));
